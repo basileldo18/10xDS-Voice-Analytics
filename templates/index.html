@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoxAnalyze - Call Analysis Dashboard</title>
+    <meta name="description" content="AI-powered call analysis dashboard for sentiment tracking and customer insights">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/css/style.css?v=4.3">
+</head>
+
+<body>
+    <!-- Page Loader -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-content">
+            <div class="loader-spinner"></div>
+            <div class="loader-logo">
+                <i class="fa-solid fa-wave-square"></i>
+                <span>VoxAnalyze</span>
+            </div>
+            <p>Analyzing your data...</p>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+
+        <!-- Sidebar Overlay (Mobile) -->
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-top">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <i class="fa-solid fa-wave-square"></i>
+                    </div>
+                    <span class="logo-text">VoxAnalyze</span>
+                </div>
+
+                <ul class="nav-links">
+                    <li class="nav-item active" data-section="dashboard">
+                        <a href="#dashboard-section" class="nav-link" id="nav-dashboard">
+                            <i class="fa-solid fa-chart-pie"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" data-section="calls">
+                        <a href="#calls-section" class="nav-link" id="nav-calls">
+                            <i class="fa-solid fa-phone"></i>
+                            <span>Calls</span>
+                            <span class="nav-badge" id="call-count-badge">0</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" data-section="analytics">
+                        <a href="#analytics-section" class="nav-link" id="nav-analytics">
+                            <i class="fa-solid fa-chart-bar"></i>
+                            <span>Analytics</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="sidebar-bottom">
+                <button id="logout-btn" class="logout-btn">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Header -->
+            <header class="top-header">
+                <div class="header-left">
+                    <h1 class="page-title">Dashboard</h1>
+                    <p class="page-subtitle">Track your call analytics and insights</p>
+                </div>
+
+                <div class="header-right">
+                    <!-- Theme Toggle -->
+                    <button class="theme-toggle-header" id="header-theme-toggle" aria-label="Toggle theme">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+
+                    <!-- Notification Bell -->
+                    <button class="notification-btn" id="notification-btn">
+                        <i class="fa-solid fa-bell"></i>
+                        <span class="notification-dot"></span>
+                    </button>
+
+                    <!-- User Profile -->
+                    <!-- User Profile Container -->
+                    <div class="user-profile-container">
+                        <div class="user-profile" id="profile-trigger">
+                            <img src="https://ui-avatars.com/api/?name=User&background=random" id="user-avatar"
+                                alt="User" class="user-avatar">
+                            <div class="user-info">
+                                <span class="user-name" id="user-name">Loading...</span>
+                                <span class="user-role" id="user-email">...</span>
+                            </div>
+                            <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                        </div>
+
+                        <!-- Profile Dropdown Menu -->
+                        <div class="profile-dropdown" id="profile-dropdown">
+                            <div class="dropdown-header-mobile">
+                                <span class="dropdown-name" id="dropdown-user-name">User Name</span>
+                                <span class="dropdown-email" id="dropdown-user-email">email@example.com</span>
+                            </div>
+                            <button class="dropdown-item logout-item" id="header-logout-btn">
+                                <i class="fa-solid fa-right-from-bracket"></i>
+                                <span>Logout</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Stats Grid -->
+            <section class="stats-grid" id="dashboard-section">
+                <div class="stat-card">
+                    <div class="stat-icon purple">
+                        <i class="fa-solid fa-microphone-lines"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Calls</span>
+                        <h3 class="stat-value" id="total-calls">0</h3>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <i class="fa-solid fa-face-smile"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Positive</span>
+                        <h3 class="stat-value" id="positive-percent">0%</h3>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon red">
+                        <i class="fa-solid fa-face-frown"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Negative</span>
+                        <h3 class="stat-value" id="negative-percent">0%</h3>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon orange">
+                        <i class="fa-solid fa-clock"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Avg. Duration</span>
+                        <h3 class="stat-value" id="avg-duration">--:--</h3>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts and Analytics Row -->
+            <section class="charts-row" id="analytics-section">
+                <!-- Sentiment Distribution Chart -->
+                <div class="chart-card">
+                    <div class="card-header">
+                        <h2>Sentiment Distribution</h2>
+                        <button class="card-action-btn">
+                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                        </button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="sentiment-chart"></canvas>
+                    </div>
+                    <div class="chart-legend" id="sentiment-legend">
+                        <div class="legend-item">
+                            <span class="legend-dot positive"></span>
+                            <span>Positive</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot neutral"></span>
+                            <span>Neutral</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot negative"></span>
+                            <span>Negative</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tags Distribution Card -->
+                <div class="chart-card tags-card">
+                    <div class="card-header">
+                        <h2>Top Categories</h2>
+                        <button class="card-action-btn">
+                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                        </button>
+                    </div>
+                    <div class="tags-list" id="tags-list">
+                        <div class="tag-item">
+                            <div class="tag-info">
+                                <span class="tag-name"><i class="fa-solid fa-headset"></i> Support</span>
+                                <span class="tag-count" id="support-count">0</span>
+                            </div>
+                            <div class="tag-bar">
+                                <div class="tag-progress support" id="support-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="tag-item">
+                            <div class="tag-info">
+                                <span class="tag-name"><i class="fa-solid fa-file-invoice-dollar"></i> Billing</span>
+                                <span class="tag-count" id="billing-count">0</span>
+                            </div>
+                            <div class="tag-bar">
+                                <div class="tag-progress billing" id="billing-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="tag-item">
+                            <div class="tag-info">
+                                <span class="tag-name"><i class="fa-solid fa-screwdriver-wrench"></i> Technical</span>
+                                <span class="tag-count" id="technical-count">0</span>
+                            </div>
+                            <div class="tag-bar">
+                                <div class="tag-progress technical" id="technical-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Calls Table Section -->
+            <section class="table-section" id="calls-section">
+                <div class="section-header">
+                    <h2>Recent Analyzed Calls</h2>
+                    <div class="table-controls">
+                        <!-- Search Bar -->
+                        <div class="search-wrapper">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                            <input type="text" id="call-search-input" name="search" class="search-input"
+                                placeholder="Search calls..." autocomplete="off">
+                        </div>
+                        <button class="filter-btn" id="filter-btn">
+                            <i class="fa-solid fa-filter"></i>
+                            Filter
+                        </button>
+                        <button class="refresh-btn" id="refresh-btn">
+                            <i class="fa-solid fa-rotate"></i>
+                            Refresh
+                        </button>
+                        <button class="btn btn-primary" id="upload-btn">
+                            <i class="fa-solid fa-upload"></i>
+                            Upload Audio
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-card">
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <span>File Name</span>
+                                        <i class="fa-solid fa-sort sort-icon"></i>
+                                    </th>
+                                    <th>
+                                        <span>Date & Time</span>
+                                        <i class="fa-solid fa-sort sort-icon"></i>
+                                    </th>
+                                    <th>Duration</th>
+                                    <th>Sentiment</th>
+                                    <th>Tags</th>
+                                    <th>Summary</th>
+                                    <th>Email</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="calls-table-body">
+                                <!-- Rows injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div class="empty-state" id="empty-state" style="display: none;">
+                        <div class="empty-icon">
+                            <i class="fa-solid fa-folder-open"></i>
+                        </div>
+                        <h3>No calls analyzed yet</h3>
+                        <p>Upload audio files to Google Drive to start analyzing</p>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div class="loading-state" id="loading-state">
+                        <div class="spinner"></div>
+                        <p>Loading calls...</p>
+                    </div>
+                </div>
+                <!-- Load More Button -->
+                <div class="load-more-container" id="load-more-container"
+                    style="display: none; text-align: center; padding: 20px;">
+                    <button class="btn btn-secondary" id="load-more-btn"
+                        style="padding: 10px 20px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; margin: 0 auto;">
+                        <i class="fa-solid fa-chevron-down"></i> Load More Calls
+                    </button>
+                    <div id="load-more-spinner" style="display: none; margin-top: 10px;">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Loading more...
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section class="reports-section" id="reports-section" style="display: none;">
+                <div class="reports-header">
+                    <h2><i class="fa-solid fa-file-lines"></i> Reports</h2>
+                    <p>Generate and download call analysis reports</p>
+                </div>
+
+                <div class="reports-grid">
+                    <!-- Report Card - Weekly Summary -->
+                    <div class="report-card">
+                        <div class="report-icon">
+                            <i class="fa-solid fa-calendar-week"></i>
+                        </div>
+                        <div class="report-content">
+                            <h3>Weekly Summary</h3>
+                            <p>Overview of call analytics for the past 7 days</p>
+                        </div>
+                        <button class="btn btn-primary report-btn">
+                            <i class="fa-solid fa-download"></i>
+                            Generate
+                        </button>
+                    </div>
+
+                    <!-- Report Card - Monthly Report -->
+                    <div class="report-card">
+                        <div class="report-icon">
+                            <i class="fa-solid fa-calendar"></i>
+                        </div>
+                        <div class="report-content">
+                            <h3>Monthly Report</h3>
+                            <p>Detailed analysis for the current month</p>
+                        </div>
+                        <button class="btn btn-primary report-btn">
+                            <i class="fa-solid fa-download"></i>
+                            Generate
+                        </button>
+                    </div>
+
+                    <!-- Report Card - Sentiment Analysis -->
+                    <div class="report-card">
+                        <div class="report-icon">
+                            <i class="fa-solid fa-face-smile"></i>
+                        </div>
+                        <div class="report-content">
+                            <h3>Sentiment Analysis</h3>
+                            <p>Breakdown of customer sentiment trends</p>
+                        </div>
+                        <button class="btn btn-primary report-btn">
+                            <i class="fa-solid fa-download"></i>
+                            Generate
+                        </button>
+                    </div>
+
+                    <!-- Report Card - Export All -->
+                    <div class="report-card">
+                        <div class="report-icon">
+                            <i class="fa-solid fa-table"></i>
+                        </div>
+                        <div class="report-content">
+                            <h3>Export All Data</h3>
+                            <p>Download all call data as CSV or Excel</p>
+                        </div>
+                        <button class="btn btn-primary report-btn">
+                            <i class="fa-solid fa-file-export"></i>
+                            Export
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Coming Soon Notice -->
+                <div class="coming-soon-notice">
+                    <i class="fa-solid fa-rocket"></i>
+                    <h3>More Reports Coming Soon!</h3>
+                    <p>We're working on advanced reporting features including automated scheduling and custom report
+                        builders.</p>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section class="settings-section" id="settings-section">
+                <!-- <div class="settings-header">
+                    <h2><i class="fa-solid fa-gear"></i> Settings</h2>
+                    <p>Customize your dashboard experience</p>
+                </div> -->
+
+                <div class="settings-grid">
+                    <!-- Appearance Settings -->
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <i class="fa-solid fa-palette"></i>
+                            <h3>Appearance</h3>
+                        </div>
+                        <div class="settings-card-body">
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Theme</span>
+                                    <span class="setting-description">Switch between light and dark mode</span>
+                                </div>
+                                <div class="theme-toggle-wrapper">
+                                    <button class="theme-btn" id="theme-light" data-theme="light">
+                                        <i class="fa-solid fa-sun"></i>
+                                        Light
+                                    </button>
+                                    <button class="theme-btn" id="theme-dark" data-theme="dark">
+                                        <i class="fa-solid fa-moon"></i>
+                                        Dark
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Compact Mode</span>
+                                    <span class="setting-description">Use smaller fonts and spacing</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-compact">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Animations</span>
+                                    <span class="setting-description">Enable smooth transitions and effects</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-animations" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notification Settings -->
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <i class="fa-solid fa-bell"></i>
+                            <h3>Notifications</h3>
+                        </div>
+                        <div class="settings-card-body">
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Email Notifications</span>
+                                    <span class="setting-description">Receive email when new calls are analyzed</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-email-notify" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Browser Notifications</span>
+                                    <span class="setting-description">Show desktop notifications</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-browser-notify">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Sound Alerts</span>
+                                    <span class="setting-description">Play sound for new notifications</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-sound">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Display Settings -->
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <i class="fa-solid fa-table-columns"></i>
+                            <h3>Display Options</h3>
+                        </div>
+                        <div class="settings-card-body">
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Calls Per Page</span>
+                                    <span class="setting-description">Number of calls to show in table</span>
+                                </div>
+                                <select class="setting-select" id="setting-page-size">
+                                    <option value="10">10</option>
+                                    <option value="25" selected>25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Auto-Refresh</span>
+                                    <span class="setting-description">Automatically refresh data</span>
+                                </div>
+                                <select class="setting-select" id="setting-auto-refresh">
+                                    <option value="0">Off</option>
+                                    <option value="30">Every 30 seconds</option>
+                                    <option value="60" selected>Every minute</option>
+                                    <option value="300">Every 5 minutes</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Date Format</span>
+                                    <span class="setting-description">How dates are displayed</span>
+                                </div>
+                                <select class="setting-select" id="setting-date-format">
+                                    <option value="relative">Relative (2 hours ago)</option>
+                                    <option value="short" selected>Short (Dec 15, 12:30 PM)</option>
+                                    <option value="full">Full (December 15, 2025)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Account Info -->
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <i class="fa-solid fa-user-circle"></i>
+                            <h3>Account</h3>
+                        </div>
+                        <div class="settings-card-body">
+                            <div class="account-info">
+                                <img src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff&size=80"
+                                    id="settings-avatar" alt="User" class="account-avatar">
+                                <div class="account-details">
+                                    <span class="account-name" id="settings-name">Loading...</span>
+                                    <span class="account-email" id="settings-email">...</span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Session</span>
+                                    <span class="setting-description">Current login session</span>
+                                </div>
+                                <span class="session-badge">
+                                    <i class="fa-solid fa-circle"></i>
+                                    Active
+                                </span>
+                            </div>
+                            <button class="settings-action-btn danger" id="settings-logout">
+                                <i class="fa-solid fa-right-from-bracket"></i>
+                                Sign Out
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Settings Button -->
+                <div class="settings-footer">
+                    <button class="btn btn-secondary" id="reset-settings">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        Reset to Defaults
+                    </button>
+                    <button class="btn btn-primary" id="save-settings">
+                        <i class="fa-solid fa-check"></i>
+                        Save Settings
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for Transcript Details -->
+    <div id="transcript-modal" class="modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-wide">
+            <div class="modal-header-single">
+                <!-- Left: Title with Speaker Badge -->
+                <div class="modal-title-section">
+                    <i class="fa-solid fa-file-audio modal-icon"></i>
+                    <div class="modal-title-info">
+                        <div class="title-with-badge">
+                            <h2 id="modal-filename">Call Details</h2>
+                            <span class="speaker-badge-inline" id="speaker-badge-display" style="display:none;">
+                                <i class="fa-solid fa-users"></i>
+                                <span id="speaker-count-text">2 Speakers</span>
+                            </span>
+                        </div>
+                        <div class="modal-meta-inline">
+                            <span class="meta-badge"><i class="fa-solid fa-calendar"></i> <span
+                                    id="modal-date">--</span></span>
+                            <span class="meta-badge" id="modal-sentiment-badge"><i class="fa-solid fa-face-smile"></i>
+                                <span id="modal-sentiment">--</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Audio Player -->
+                <div class="modal-audio-section">
+                    <audio id="modal-audio" controls>
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+
+                <button class="close-modal" aria-label="Close modal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Tabs -->
+            <div class="modal-tabs">
+                <button class="modal-tab active" data-tab="summary">
+                    <i class="fa-solid fa-align-left"></i>
+                    Summary
+                </button>
+                <button class="modal-tab" data-tab="transcript">
+                    <i class="fa-solid fa-file-lines"></i>
+                    Transcript
+                </button>
+                <button class="modal-tab" data-tab="translation">
+                    <i class="fa-solid fa-language"></i>
+                    Translation
+                </button>
+                <button class="modal-tab" data-tab="minutes">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    Meeting Minutes
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Summary Tab Content -->
+                <div class="tab-content active" id="tab-summary">
+                    <div class="content-section">
+                        <h4><i class="fa-solid fa-brain"></i> AI Summary</h4>
+                        <div class="content-box" id="modal-summary" dir="auto">
+                            <p>Loading summary...</p>
+                        </div>
+                    </div>
+                    <div class="content-section">
+                        <h4><i class="fa-solid fa-tags"></i> Tags</h4>
+                        <div class="modal-tags" id="modal-tags"></div>
+                    </div>
+                </div>
+
+                <!-- Transcript Tab Content -->
+                <div class="tab-content" id="tab-transcript">
+                    <div class="content-section">
+                        <h4><i class="fa-solid fa-microphone"></i> Full Transcript</h4>
+                        <div class="edit-hint-banner">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span>You can edit the transcript text or speaker names directly. Press
+                                <strong>Enter</strong> to save your changes.</span>
+                        </div>
+                        <div class="content-box transcript-box" id="modal-text" dir="auto">
+                            <p>Loading transcript...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Translation Tab Content -->
+                <div class="tab-content" id="tab-translation">
+                    <div class="content-section">
+                        <h4><i class="fa-solid fa-globe"></i> Translation</h4>
+                        <div class="translation-controls">
+                            <select id="translation-language" class="setting-select">
+                                <option value="en">English</option>
+                                <option value="ml">Malayalam</option>
+                                <option value="hi">Hindi</option>
+                                <option value="ar">Arabic</option>
+                            </select>
+                            <button class="btn btn-primary" id="translate-btn">
+                                <i class="fa-solid fa-language"></i>
+                                Translate
+                            </button>
+                        </div>
+                        <div class="content-box" id="modal-translation" dir="auto">
+                            <p class="translation-placeholder">Select a language and click Translate to see the
+                                translation.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Meeting Minutes Tab Content -->
+                <div class="tab-content" id="tab-minutes">
+                    <div class="content-section">
+                        <h4><i class="fa-solid fa-clipboard-list"></i> Minutes of Meeting</h4>
+                        <div class="content-box meeting-minutes-box" id="modal-minutes" dir="auto">
+                            <p class="minutes-placeholder">Loading meeting minutes...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary"
+                    onclick="document.getElementById('transcript-modal').style.display='none'; document.body.style.overflow='';">
+                    Close
+                </button>
+                <button class="btn btn-primary" id="copy-transcript-btn">
+                    <i class="fa-solid fa-copy"></i>
+                    Copy Transcript
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal-overlay" id="upload-modal" style="display: none;">
+        <div class="modal-content upload-modal-content">
+            <div class="modal-header">
+                <div class="modal-title-section">
+                    <i class="fa-solid fa-cloud-arrow-up modal-icon"></i>
+                    <div class="modal-title-info">
+                        <h2>Upload Audio Files</h2>
+                        <span class="meta-label">Batch upload scripts to Google Drive</span>
+                    </div>
+                </div>
+                <button class="modal-close" id="upload-modal-close">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Upload Area -->
+                <div class="upload-area" id="upload-drop-zone">
+                    <div class="upload-icon">
+                        <i class="fa-solid fa-files-medical"></i>
+                    </div>
+                    <h3>Drag & Drop Audio Files</h3>
+                    <p>or click to browse</p>
+                    <p class="upload-hint">You can select multiple files at once</p>
+                    <!-- Renamed ID to ensure uniqueness and prevent zombie element conflicts -->
+                    <input type="file" id="upload-modal-file-input-batch" accept="audio/*" multiple
+                        style="display: none;">
+                </div>
+
+                <!-- Selected Files List -->
+                <div class="selected-files-container" id="selected-files-container" style="display: none;">
+                    <div class="files-list-header">
+                        <span id="files-count-label">Selected Files (0)</span>
+                        <button class="btn-clear-all" id="clear-all-files">Clear All</button>
+                    </div>
+                    <div class="selected-files-list" id="selected-files-list">
+                        <!-- File items will be injected here -->
+                    </div>
+                </div>
+
+                <!-- Advanced Options -->
+                <div class="upload-advanced-trigger" id="upload-advanced-trigger">
+                    <span>Advanced Options</span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </div>
+
+                <div class="upload-advanced-content" id="upload-advanced-content" style="display: none;">
+                    <div class="advanced-grid">
+                        <div class="advanced-field">
+                            <label>Language Hint</label>
+                            <select id="upload-language" class="setting-select">
+                                <option value="auto">Auto Detect</option>
+                                <option value="ar">Arabic</option>
+                                <option value="en">English</option>
+                                <option value="ml">Malayalam</option>
+                                <option value="hi">Hindi</option>
+                                <option value="es">Spanish</option>
+                                <option value="fr">French</option>
+                            </select>
+                        </div>
+                        <div class="advanced-field">
+                            <label>Expected Speakers</label>
+                            <select id="upload-speakers" class="setting-select">
+                                <option value="0">Auto Detect</option>
+                                <option value="1">1 Speaker</option>
+                                <option value="2">2 Speakers</option>
+                                <option value="3">3 Speakers</option>
+                                <option value="4">4 Speakers</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="advanced-hint">Manually selecting these can improve diarization for Arabic calls.</p>
+                </div>
+
+                <!-- Progress Section -->
+                <div class="upload-progress-section" id="upload-progress-section" style="display: none;">
+                    <!-- File Info Header -->
+                    <div class="progress-file-info" id="progress-file-info">
+                        <i class="fa-solid fa-file-audio"></i>
+                        <span id="progress-file-name">filename.mp3</span>
+                    </div>
+
+                    <!-- Main Progress Bar -->
+                    <div class="batch-progress-info" id="batch-progress-info">
+                        <span class="batch-status">Processing 1 of 5 files</span>
+                        <span class="batch-percent">20%</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="upload-progress-bar" style="width: 0%;"></div>
+                    </div>
+                    <div class="progress-percent-row">
+                        <span class="progress-label" id="upload-status-text">Uploading current file...</span>
+                        <span class="progress-percent" id="upload-percent">0%</span>
+                    </div>
+
+                    <!-- Step-by-step Progress -->
+                    <div class="upload-steps">
+                        <div class="upload-step active" id="step-upload">
+                            <div class="step-icon">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            </div>
+                            <div class="step-info">
+                                <span class="step-title">Uploading to Drive</span>
+                                <span class="step-status" id="step-upload-status">In progress...</span>
+                            </div>
+                            <div class="step-indicator">
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                        <div class="upload-step" id="step-transcribe">
+                            <div class="step-icon">
+                                <i class="fa-solid fa-microphone"></i>
+                            </div>
+                            <div class="step-info">
+                                <span class="step-title">Transcribing Audio</span>
+                                <span class="step-status" id="step-transcribe-status">Waiting...</span>
+                            </div>
+                            <div class="step-indicator">
+                                <i class="fa-solid fa-circle"></i>
+                            </div>
+                        </div>
+                        <div class="upload-step" id="step-analyze">
+                            <div class="step-icon">
+                                <i class="fa-solid fa-brain"></i>
+                            </div>
+                            <div class="step-info">
+                                <span class="step-title">Analyzing Content</span>
+                                <span class="step-status" id="step-analyze-status">Waiting...</span>
+                            </div>
+                            <div class="step-indicator">
+                                <i class="fa-solid fa-circle"></i>
+                            </div>
+                        </div>
+                        <div class="upload-step" id="step-save">
+                            <div class="step-icon">
+                                <i class="fa-solid fa-database"></i>
+                            </div>
+                            <div class="step-info">
+                                <span class="step-title">Saving Results</span>
+                                <span class="step-status" id="step-save-status">Waiting...</span>
+                            </div>
+                            <div class="step-indicator">
+                                <i class="fa-solid fa-circle"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Success Message (hidden by default) -->
+                    <div class="upload-success-message" id="upload-success-message" style="display: none;">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>All files uploaded and analyzed successfully!</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="upload-cancel-btn">Cancel</button>
+                <button class="btn btn-primary" id="upload-submit-btn" disabled>
+                    <i class="fa-solid fa-upload"></i>
+                    Upload
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real-time Notification Container -->
+    <div id="vapi-notification-container" class="notification-container">
+        <!-- Dynamic notifications will appear here -->
+    </div>
+
+    <!-- Filter Modal -->
+    <div class="modal-overlay" id="filter-modal" style="display: none;">
+        <div class="modal-content filter-modal-content">
+            <div class="modal-header">
+                <div class="modal-title-section">
+                    <i class="fa-solid fa-filter modal-icon"></i>
+                    <div class="modal-title-info">
+                        <h2>Filter Calls</h2>
+                        <span class="meta-label">Refine call analysis results</span>
+                    </div>
+                </div>
+                <button class="modal-close" id="filter-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="filter-group">
+                    <label class="filter-label">Sentiment</label>
+                    <div class="filter-options">
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="sentiment" value="positive" checked>
+                            <span class="checkbox-custom sentiment-positive"></span>
+                            <span class="checkbox-label">Positive</span>
+                        </label>
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="sentiment" value="neutral" checked>
+                            <span class="checkbox-custom sentiment-neutral"></span>
+                            <span class="checkbox-label">Neutral</span>
+                        </label>
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="sentiment" value="negative" checked>
+                            <span class="checkbox-custom sentiment-negative"></span>
+                            <span class="checkbox-label">Negative</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Date Range</label>
+                    <div class="date-range-grid">
+                        <div class="date-input-wrapper">
+                            <span class="input-hint">From</span>
+                            <input type="date" id="filter-date-from" class="filter-date-input">
+                        </div>
+                        <div class="date-input-wrapper">
+                            <span class="input-hint">To</span>
+                            <input type="date" id="filter-date-to" class="filter-date-input">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Tags</label>
+                    <div class="filter-options tags-selection">
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="tags" value="Support" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Support</span>
+                        </label>
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="tags" value="Billing" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Billing</span>
+                        </label>
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="tags" value="Technical Issue" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Technical Issue</span>
+                        </label>
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="tags" value="Churn Risk" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Churn Risk</span>
+                        </label>
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="tags" value="Sales" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Sales</span>
+                        </label>
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="tags" value="Feedback" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Feedback</span>
+                        </label>
+                        <label class="filter-checkbox-wrapper">
+                            <input type="checkbox" name="tags" value="Complaint" checked>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Complaint</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="filter-reset-btn">
+                    <i class="fa-solid fa-undo"></i> Reset
+                </button>
+                <button class="btn btn-primary" id="filter-apply-btn">
+                    <i class="fa-solid fa-check"></i> Apply Filters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Modal (Summary Only) -->
+    <div class="modal-overlay" id="summary-modal" style="display: none;">
+        <div class="summary-modal-wrapper">
+            <!-- Close Button -->
+            <button class="summary-close-icon" onclick="closeSummaryModal()" aria-label="Close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <!-- Modal Card -->
+            <div class="summary-modal-card">
+                <!-- Header -->
+                <div class="summary-modal-header">
+                    <div class="summary-icon">
+                        <i class="fa-solid fa-file-lines"></i>
+                    </div>
+                    <h2 class="summary-modal-title">Call Summary</h2>
+                    <p class="summary-modal-subtitle" id="summary-modal-filename">--</p>
+                </div>
+
+                <!-- Summary Content -->
+                <div class="summary-modal-body">
+                    <div class="summary-content-box" id="summary-modal-content" dir="auto">
+                        <p>Loading summary...</p>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="summary-modal-footer">
+                    <button class="btn-summary-close" onclick="closeSummaryModal()">
+                        <i class="fa-solid fa-xmark"></i>
+                        Close
+                    </button>
+                    <button class="btn-summary-details" id="btn-view-full-details">
+                        <i class="fa-solid fa-eye"></i>
+                        View Full Details
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Verification Modal -->
+    <div class="modal-overlay" id="admin-verify-modal" style="display: none;">
+        <div class="admin-modal-wrapper">
+            <!-- Close Button -->
+            <button class="admin-close-icon" id="admin-verify-close" aria-label="Close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <!-- Modal Card -->
+            <div class="admin-modal-card">
+                <!-- Header Section with Icon -->
+                <div class="admin-header-section">
+                    <div class="admin-danger-icon">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <h2 class="admin-modal-title">Delete Confirmation</h2>
+                    <p class="admin-modal-desc">This action requires administrator privileges</p>
+                </div>
+
+                <!-- Warning Section -->
+                <div class="admin-warning-box">
+                    <div class="warning-icon-badge">
+                        <i class="fa-solid fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="warning-content">
+                        <h4>Permanent Deletion</h4>
+                        <p>This call record will be permanently deleted from the database and cannot be recovered.</p>
+                    </div>
+                </div>
+
+                <!-- Password Section -->
+                <div class="admin-password-section">
+                    <label class="password-label">
+                        <i class="fa-solid fa-lock"></i>
+                        Administrator Password
+                    </label>
+                    <div class="password-input-box">
+                        <i class="fa-solid fa-key password-icon"></i>
+                        <input type="password" id="admin-password" class="password-field"
+                            placeholder="Enter administrator password" autocomplete="current-password">
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="admin-action-buttons">
+                    <button class="btn-action btn-cancel" id="admin-verify-cancel">
+                        <i class="fa-solid fa-ban"></i>
+                        <span>Cancel</span>
+                    </button>
+                    <button class="btn-action btn-confirm-delete" id="admin-verify-confirm">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span>Confirm Delete</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hidden input to store call ID -->
+            <input type="hidden" id="delete-call-id">
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Vapi Widget -->
+    <script src="https://unpkg.com/@vapi-ai/client-sdk-react/dist/embed/widget.umd.js" async
+        type="text/javascript"></script>
+
+    <vapi-widget public-key="{{ vapi_public_key }}" assistant-id="{{ vapi_assistant_id }}" mode="voice"
+        position="bottom-right" theme="light" button-base-color="#3F0067" button-accent-color="#ffffff"
+        base-color="#ffffff" accent-color="#9344B3"
+        icon="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgiIGhlaWdodD0iMjgiIHZpZXdCb3g9IjAgMCAyNTMgMjU0IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxjaXJjbGUgY3g9IjEyNi41IiBjeT0iMTI2LjUiIHI9Ijk2LjE0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS13aWR0aD0iMSIgb3BhY2l0eT0iMC4wNSI+PC9jaXJjbGU+PHJlY3QgeD0iMTE2LjM4IiB5PSI2LjMyNDk5OTk5OTk5OTk5OSIgd2lkdGg9IjIwLjI0MDAwMDAwMDAwMDAwMiIgaGVpZ2h0PSI0OC4wNyIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSI+PC9yZWN0PjxyZWN0IHg9IjE1MS4xMDk3NzM3ODcyMzI4OCIgeT0iMTMuNjY1NDEzOTgyNzEyMjk1IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjQ2LjM3MzQxMTc2NDcwNTg4IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgyMS4xNzY0NzA1ODgyMzUzMDQgMTYxLjIyOTc3Mzc4NzIzMjkgMzYuODUyMTE5ODY1MDY1MjM0KSI+PC9yZWN0PjxyZWN0IHg9IjE4MS4xNDkwOTkxODAxOCIgeT0iMzMuMTEzMjcwOTMzNjk5OTUiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iNDQuNjc2ODIzNTI5NDExNzYiIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDQyLjM1Mjk0MTE3NjQ3MDU5NCAxOTEuMjY5MDk5MTgwMTggNTUuNDUxNjgyNjk4NDA1ODMpIj48L3JlY3Q+PHJlY3QgeD0iMjAyLjQ0MDk5ODgzMDg3NTY5IiB5PSI2Mi4xNTY1OTY4Mjg1ODQ3OTYiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iNDIuOTgwMjM1Mjk0MTE3NjQiIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDYzLjUyOTQxMTc2NDcwNTg4NCAyMTIuNTYwOTk4ODMwODc1NyA4My42NDY3MTQ0NzU2NDM2MikiPjwvcmVjdD48cmVjdCB4PSIyMTIuMTA5ODgzNzA5MDA0NjMiIHk9Ijk2Ljk4NzQ5NjM5MTc4NjM4IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjQxLjI4MzY0NzA1ODgyMzUyNiIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSIgdHJhbnNmb3JtPSJyb3RhdGUoODQuNzA1ODgyMzUyOTQxMTcgMjIyLjIyOTg4MzcwOTAwNDY0IDExNy42MjkzMTk5MjExOTgxNSkiPjwvcmVjdD48cmVjdCB4PSIyMDguODQ5OTE3MzM0NjM0ODIiIHk9IjEzMy4wMTY0MzA0NTM3NjUzNyIgd2lkdGg9IjIwLjI0MDAwMDAwMDAwMDAwMiIgaGVpZ2h0PSIzOS41ODcwNTg4MjM1Mjk0MSIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSIgdHJhbnNmb3JtPSJyb3RhdGUoMTA1Ljg4MjM1Mjk0MTE3NjQ4IDIxOC45Njk5MTczMzQ2MzQ4MyAxNTIuODA5OTU5ODY1NTMwMDYpIj48L3JlY3Q+PHJlY3QgeD0iMTkzLjEwMTM3NjIzMDcyMjIyIiB5PSIxNjUuNDkyMDU4NjQ3Mzg0MDYiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iMzcuODkwNDcwNTg4MjM1Mjk2IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgxMjcuMDU4ODIzNTI5NDExNzcgMjAzLjIyMTM3NjIzMDcyMjIzIDE4NC40MzcyOTM5NDE1MDE3KSI+PC9yZWN0PjxyZWN0IHg9IjE2Ni45OTExODgxMzkwMjkwMiIgeT0iMTkwLjE0MjkzNDI1MjU3NDUiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iMzYuMTkzODgyMzUyOTQxMTciIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDE0OC4yMzUyOTQxMTc2NDcwNCAxNzcuMTExMTg4MTM5MDI5MDMgMjA4LjIzOTg3NTQyOTA0NTA3KSI+PC9yZWN0PjxyZWN0IHg9IjEzNC4wNDU2Nzg2NDI4ODUwNiIgeT0iMjAzLjc1NDM4Njc0NDc4Njc5IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjM0LjQ5NzI5NDExNzY0NzA2IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgxNjkuNDExNzY0NzA1ODgyMzggMTQ0LjE2NTY3ODY0Mjg4NTA3IDIyMS4wMDMwMzM4MDM2MTAzMikiPjwvcmVjdD48cmVjdCB4PSI5OC43MTQzMjEzNTcxMTQ5NCIgeT0iMjAzLjc1NDM4Njc0NDc4Njc5IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjM0LjQ5NzI5NDExNzY0NzA2IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgxOTAuNTg4MjM1Mjk0MTE3NjIgMTA4LjgzNDMyMTM1NzExNDk0IDIyMS4wMDMwMzM4MDM2MTAzMikiPjwvcmVjdD48cmVjdCB4PSI2NS43Njg4MTExODYwOTcxIiB5PSIxOTAuMTQyOTM0MjUyNTc0NTIiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iMzYuMTkzODgyMzUyOTQxMTciIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDIxMS43NjQ3MDU4ODIzNTI5MyA3NS44ODg4MTExODYwOTcxIDIwOC4yMzk4NzU0MjkwNDUxKSI+PC9yZWN0PjxyZWN0IHg9IjM5LjY1ODYyMzc2OTI3Nzc3IiB5PSIxNjUuNDkyMDU4NjQ3Mzg0MDYiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iMzcuODkwNDcwNTg4MjM1Mjk2IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgyMzIuOTQxMTc2NDcwNTg4MjMgNDkuNzc4NjIzNzY5Mjc3NzcgMTg0LjQzNzI5Mzk0MTUwMTcpIj48L3JlY3Q+PHJlY3QgeD0iMjMuOTEwMDgyNjY1MzY1MTciIHk9IjEzMy4wMTY0MzA0NTM3NjUzNyIgd2lkdGg9IjIwLjI0MDAwMDAwMDAwMDAwMiIgaGVpZ2h0PSIzOS41ODcwNTg4MjM1Mjk0MSIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSIgdHJhbnNmb3JtPSJyb3RhdGUoMjU0LjExNzY0NzA1ODgyMzU0IDM0LjAzMDA4MjY2NTM2NTE3IDE1Mi44MDk5NTk4NjU1MzAwNikiPjwvcmVjdD48cmVjdCB4PSIyMC42NTAxMTYyOTA5OTUzNzQiIHk9Ijk2Ljk4NzQ5NjM5MTc4NjQyIiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjQxLjI4MzY0NzA1ODgyMzUyNiIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSIgdHJhbnNmb3JtPSJyb3RhdGUoMjc1LjI5NDExNzY0NzA1ODggMzAuNzcwMTE2MjkwOTk1Mzc1IDExNy42MjkzMTk5MjExOTgxOSkiPjwvcmVjdD48cmVjdCB4PSIzMC4zMTkwMDExNjkxMjQyOCIgeT0iNjIuMTU2NTk2ODI4NTg0ODQiIHdpZHRoPSIyMC42MTg0MDAwMDAwMDAwMDIiIGhlaWdodD0iNDIuOTgwMjM1Mjk0MTE3NjQiIHJ4PSIxMC4zMDkyMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDI5Ni40NzA1ODgyMzUyOTQxIDQwLjQzOTAwMTE2OTEyNDI4IDgzLjY0NjcxNDQ3NTY0MzY2KSI+PC9yZWN0PjxyZWN0IHg9IjUxLjYxMDkwMDgxOTgxOTkzIiB5PSIzMy4xMTMyNzA5MzM2OTk5OTQiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iNDQuNjc2ODIzNTI5NDExNzYiIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDMxNy42NDcwNTg4MjM1Mjk0IDYxLjczMDkwMDgxOTgxOTk0IDU1LjQ1MTY4MjY5ODQwNTg3NSkiPjwvcmVjdD48cmVjdCB4PSI4MS42NTAyMjYyMTI3NjcxMSIgeT0iMTMuNjY1NDEzOTgyNzEyMjk1IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjQ2LjM3MzQxMTc2NDcwNTg4IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgzMzguODIzNTI5NDExNzY0NyA5MS43NzAyMjYyMTI3NjcxMSAzNi44NTIxMTk4NjUwNjUyMzQpIj48L3JlY3Q+PC9zdmc+"
+        style="transform: scale(1.3); transform-origin: bottom right; margin-bottom: 10px; margin-right: 10px;"></vapi-widget>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async function () {
+            const widget = document.querySelector('vapi-widget');
+            console.log('[VAPI DEBUG] DOMContentLoaded. Widget found:', widget);
+
+            if (widget) {
+                // Ensure the element is upgraded before trusting it fully, though addEventListener usually works on hydration
+                await customElements.whenDefined('vapi-widget');
+                console.log('[VAPI DEBUG] vapi-widget element defined/upgraded.');
+
+                // 1. Standard Event Listener
+                widget.addEventListener('call-end', function (event) {
+                    console.log('[VAPI DEBUG] "call-end" event fired!', event);
+                    handleCallEnd(event.detail);
+                });
+
+                // 2. React Prop/Property Fallback (sometimes needed for React wrappers)
+                // Note: This relies on the property being exposed on the DOM node
+                // 2. Standard Event Listener (Best Practice for Custom Elements)
+                widget.addEventListener('call-end', (event) => {
+                    console.log('[VAPI DEBUG] "call-end" event triggered!', event.detail);
+                    handleCallEnd(event.detail);
+                });
+
+                // 3. Fallback Event Listener names
+                widget.addEventListener('call-ended', (event) => {
+                    console.log('[VAPI DEBUG] "call-ended" event triggered!', event.detail);
+                    handleCallEnd(event.detail);
+                });
+
+                // 4. Manual property check (React wrapper style)
+                widget.oncallend = function (detail) {
+                    console.log('[VAPI DEBUG] "oncallend" property triggered!', detail);
+                    handleCallEnd(detail);
+                };
+
+                widget.addEventListener('error', function (event) {
+                    console.error('[VAPI DEBUG] Widget error:', event.detail);
+                });
+
+                // 5. Generic Message Listener (Catch-all)
+                widget.addEventListener('message', (event) => {
+                    console.log('[VAPI DEBUG] "message" event triggered!', event);
+                    // Check if this message is actually the call end
+                    if (event.detail && (event.detail.type === 'call-end' || event.detail.status === 'ended')) {
+                        console.log('[VAPI DEBUG] Detected call end via message event!');
+                        handleCallEnd(event.detail);
+                    }
+                });
+
+                // Debug: Log everything
+                console.log('[VAPI DEBUG] Listeners attached to widget:', widget);
+
+                // DEEP INSPECTION
+                setTimeout(() => {
+                    console.log("[VAPI DEBUG] Inspecting Widget Properties:");
+                    console.dir(widget);
+
+                    // Check for internal vapi instance
+                    if (widget.vapi) {
+                        console.log("[VAPI DEBUG] Found internal 'vapi' instance on widget!");
+                        widget.vapi.on('call-end', (detail) => {
+                            console.log("[VAPI DEBUG] Internal vapi instance 'call-end' triggered!", detail);
+                            handleCallEnd(detail);
+                        });
+                        widget.vapi.on('message', (msg) => console.log("[VAPI DEBUG] Internal vapi message:", msg));
+                    }
+
+                    // Check global vapi
+                    if (window.vapi) {
+                        console.log("[VAPI DEBUG] Found global 'window.vapi'!");
+                        window.vapi.on('call-end', (detail) => {
+                            console.log("[VAPI DEBUG] Global window.vapi 'call-end' triggered!", detail);
+                            handleCallEnd(detail);
+                        });
+                    }
+                }, 3000); // Wait for SDK to initialize
+            } else {
+                console.error('[VAPI DEBUG] Critical: <vapi-widget> element not found in DOM.');
+            }
+        });
+
+        async function handleCallEnd(callDetail) {
+            console.log('[VAPI DEBUG] Handling call end with detail:', callDetail);
+            if (!callDetail) {
+                console.warn('[VAPI DEBUG] No detail provided in event.');
+                return;
+            }
+
+            // Check if we have a recording URL
+            // Checking common paths.
+            const recordingUrl = callDetail.recordingUrl || callDetail.stereoRecordingUrl || (callDetail.artifact ? callDetail.artifact.recordingUrl : null);
+
+            console.log('[VAPI DEBUG] Extracted Recording URL:', recordingUrl);
+
+            if (recordingUrl) {
+                // Determine the filename using current timestamp if not provided in detail
+                // Note: backend generates a filename if missing, but we can try to be helpful.
+                const filename = `vapi_call_${new Date().toISOString().replace(/[:.]/g, '-')}.wav`;
+
+                // Show initial toast via NotificationService which is available globally
+                if (window.notificationService) {
+                    window.notificationService.showToast('Call Ended', 'Initiating processing...', 'info', 'fa-phone-slash');
+                }
+
+                try {
+                    // Send the recording URL to our backend to start background processing
+                    // We do NOT need to await a stream here anymore. The global SSE connection handles updates.
+                    const response = await fetch('/api/vapi-call', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            recording_url: recordingUrl,
+                            filename: filename
+                        })
+                    });
+
+                    if (response.ok) {
+                        console.log('[VAPI] Backend processing triggered successfully.');
+                    } else {
+                        const errorText = await response.text();
+                        console.error('[VAPI] Failed to trigger backend processing:', errorText);
+                        if (window.notificationService) {
+                            window.notificationService.showToast('Error', 'Failed to start processing.', 'error', 'fa-triangle-exclamation');
+                        }
+                    }
+                } catch (err) {
+                    console.error('[VAPI] Error calling backend:', err);
+                    if (window.notificationService) {
+                        window.notificationService.showToast('Error', 'Network error starting processing.', 'error', 'fa-wifi');
+                    }
+                }
+            } else {
+                console.warn('[VAPI DEBUG] No recording URL found in call detail.');
+            }
+        }
+
+        // Helper for toasts (reusing existing toast logic if available or simple fallback)
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+            <i class="fa-solid fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'circle-exclamation' : 'info-circle'}"></i>
+            <div class="toast-content">
+                <span class="toast-message">${message}</span>
+            </div>
+            `;
+            container.appendChild(toast);
+
+            // Trigger animation
+            requestAnimationFrame(() => toast.classList.add('show'));
+
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/static/js/main.js?v=4.14"></script>
+</body>
+
+</html>

@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - VoxAnalyze</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --accent-primary: #6366f1;
+            --accent-primary-dark: #4f46e5;
+            --border-light: #e2e8f0;
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+            background: var(--bg-primary);
+        }
+
+        /* Light Theme Background with Subtle Gradient */
+        .background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #f1f5f9 100%);
+            z-index: -2;
+        }
+
+        /* Subtle Floating Orbs - Light Theme */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.5;
+            animation: float 25s infinite ease-in-out;
+            z-index: -1;
+        }
+
+        .orb-1 {
+            width: 600px;
+            height: 600px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+            top: -20%;
+            left: -15%;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(99, 102, 241, 0.08) 100%);
+            bottom: -25%;
+            right: -15%;
+            animation-delay: -8s;
+        }
+
+        .orb-3 {
+            width: 400px;
+            height: 400px;
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(99, 102, 241, 0.08) 100%);
+            top: 40%;
+            right: 10%;
+            animation-delay: -15s;
+        }
+
+        .orb-4 {
+            width: 350px;
+            height: 350px;
+            background: linear-gradient(135deg, rgba(34, 211, 238, 0.08) 0%, rgba(59, 130, 246, 0.06) 100%);
+            bottom: 20%;
+            left: 5%;
+            animation-delay: -5s;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            25% {
+                transform: translate(20px, -25px) scale(1.03);
+            }
+
+            50% {
+                transform: translate(-15px, 15px) scale(0.97);
+            }
+
+            75% {
+                transform: translate(15px, 8px) scale(1.01);
+            }
+        }
+
+        /* Glassmorphism Card - Light Theme */
+        .login-container {
+            position: relative;
+            z-index: 1;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow:
+                0 25px 50px -12px rgba(0, 0, 0, 0.08),
+                0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+                0 1px 0 0 rgba(255, 255, 255, 1) inset;
+            padding: 48px 44px;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            animation: cardAppear 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        @keyframes cardAppear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Logo */
+        .login-logo {
+            margin-bottom: 32px;
+            animation: logoAppear 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+            opacity: 0;
+            transform: translateY(15px);
+        }
+
+        @keyframes logoAppear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-dark) 100%);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 14px;
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .logo-icon::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                left: -100%;
+            }
+
+            100% {
+                left: 100%;
+            }
+        }
+
+        .logo-icon i {
+            font-size: 1.75rem;
+            color: white;
+        }
+
+        .logo-text {
+            font-size: 1.625rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .logo-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-weight: 400;
+        }
+
+        /* Form */
+        .login-form {
+            opacity: 0;
+            animation: formAppear 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+            transform: translateY(15px);
+        }
+
+        @keyframes formAppear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            z-index: 2;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px 14px 46px;
+            border: 1px solid var(--border-light);
+            border-radius: 14px;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            background: rgba(255, 255, 255, 0.8);
+            color: var(--text-primary);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        .input-wrapper:has(input:focus) i {
+            color: var(--accent-primary);
+        }
+
+        /* Login Button */
+        .login-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-dark) 100%);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+            letter-spacing: 0.3px;
+            margin-top: 8px;
+        }
+
+        .login-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(99, 102, 241, 0.35);
+        }
+
+        .login-btn:hover::before {
+            left: 100%;
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .login-btn i {
+            margin-left: 8px;
+            transition: transform 0.3s ease;
+        }
+
+        .login-btn:hover i {
+            transform: translateX(4px);
+        }
+
+        /* Error Message */
+        .error-msg {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #dc2626;
+            font-size: 0.875rem;
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            display: none;
+            text-align: left;
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20%,
+            60% {
+                transform: translateX(-5px);
+            }
+
+            40%,
+            80% {
+                transform: translateX(5px);
+            }
+        }
+
+        /* Divider */
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 24px 0;
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-light);
+        }
+
+        .divider span {
+            padding: 0 14px;
+        }
+
+        /* Footer Links */
+        .footer-links {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .footer-links a {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--accent-primary-dark);
+            text-decoration: underline;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 36px 28px;
+                margin: 15px;
+                border-radius: 24px;
+            }
+
+            .logo-icon {
+                width: 56px;
+                height: 56px;
+            }
+
+            .logo-icon i {
+                font-size: 1.5rem;
+            }
+
+            .logo-text {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Light Theme Background -->
+    <div class="background"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="orb orb-4"></div>
+
+    <!-- Login Card -->
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-wave-square"></i>
+                </div>
+                <div class="logo-text">VoxAnalyze</div>
+                <div class="logo-subtitle">Intelligent Call Analytics</div>
+            </div>
+
+            <form id="login-form" class="login-form">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <div class="input-wrapper">
+                        <i class="fa-regular fa-envelope"></i>
+                        <input type="email" id="email" required placeholder="name@company.com" autocomplete="email">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="password" required placeholder="Enter your password"
+                            autocomplete="current-password">
+                    </div>
+                </div>
+                <button type="submit" class="login-btn">
+                    Sign In
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                <p class="error-msg" id="error-msg"></p>
+            </form>
+
+            <div class="divider">
+                <span>Secure Login</span>
+            </div>
+
+            <div class="footer-links">
+                Don't have an account? <a href="#">Contact Admin</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Logic -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = 'https://vsnzpmeuhsjqbkviebbf.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzbnpwbWV1aHNqcWJrdmllYmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NjcyOTMsImV4cCI6MjA4MDQ0MzI5M30.4-eEKIPw5pXHacQYcjK43puRNeCow1wS93XRVv9N7iM';
+
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const loginForm = document.getElementById('login-form');
+        const errorMsg = document.getElementById('error-msg');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const btn = document.querySelector('.login-btn');
+
+            btn.innerHTML = '<span class="spinner"></span>Signing in...';
+            btn.disabled = true;
+            errorMsg.style.display = 'none';
+
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                if (error) throw error;
+
+                // Create server-side session
+                const sessionResponse = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: data.user.id,
+                        email: data.user.email
+                    })
+                });
+
+                if (!sessionResponse.ok) {
+                    throw new Error('Failed to create session');
+                }
+
+                // Success animation
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Success!';
+                btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 800);
+
+            } catch (err) {
+                console.error(err);
+                errorMsg.textContent = err.message || 'Login failed. Please try again.';
+                errorMsg.style.display = 'block';
+                btn.innerHTML = 'Sign In <i class="fa-solid fa-arrow-right"></i>';
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+
+</html>

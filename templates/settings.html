@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - VoxAnalyze</title>
+    <meta name="description" content="VoxAnalyze Dashboard Settings">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+
+        <!-- Sidebar Overlay (Mobile) -->
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-top">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <i class="fa-solid fa-wave-square"></i>
+                    </div>
+                    <span class="logo-text">VoxAnalyze</span>
+                </div>
+
+                <ul class="nav-links">
+                    <li class="nav-item">
+                        <a href="/" class="nav-link">
+                            <i class="fa-solid fa-chart-pie"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/#calls-section" class="nav-link">
+                            <i class="fa-solid fa-phone"></i>
+                            <span>Calls</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/#analytics-section" class="nav-link">
+                            <i class="fa-solid fa-chart-bar"></i>
+                            <span>Analytics</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/#reports-section" class="nav-link">
+                            <i class="fa-solid fa-file-lines"></i>
+                            <span>Reports</span>
+                        </a>
+                    </li>
+                    <li class="nav-item active">
+                        <a href="/settings" class="nav-link">
+                            <i class="fa-solid fa-gear"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="sidebar-bottom">
+                <button id="logout-btn" class="logout-btn">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Header -->
+            <header class="top-header">
+                <!-- Header Removed (Duplicate) -->
+
+                <div class="header-right">
+                    <!-- User Profile -->
+                    <div class="user-profile" id="profile-trigger">
+                        <img src="https://ui-avatars.com/api/?name=User&background=random" id="user-avatar" alt="User"
+                            class="user-avatar">
+                        <div class="user-info">
+                            <span class="user-name" id="user-name">Loading...</span>
+                            <span class="user-role" id="user-email">...</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down dropdown-icon"></i>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Settings Content -->
+            <div class="settings-page-content">
+                <div class="settings-grid">
+                    <!-- Appearance Settings -->
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <i class="fa-solid fa-palette"></i>
+                            <h3>Appearance</h3>
+                        </div>
+                        <div class="settings-card-body">
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Theme</span>
+                                    <span class="setting-description">Switch between light and dark mode</span>
+                                </div>
+                                <div class="theme-toggle-wrapper">
+                                    <button class="theme-btn" id="theme-light" data-theme="light">
+                                        <i class="fa-solid fa-sun"></i>
+                                        Light
+                                    </button>
+                                    <button class="theme-btn" id="theme-dark" data-theme="dark">
+                                        <i class="fa-solid fa-moon"></i>
+                                        Dark
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Compact Mode</span>
+                                    <span class="setting-description">Use smaller fonts and spacing</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-compact">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Animations</span>
+                                    <span class="setting-description">Enable smooth transitions and effects</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-animations" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notification Settings -->
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <i class="fa-solid fa-bell"></i>
+                            <h3>Notifications</h3>
+                        </div>
+                        <div class="settings-card-body">
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Email Notifications</span>
+                                    <span class="setting-description">Receive email when new calls are analyzed</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-email-notify" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Browser Notifications</span>
+                                    <span class="setting-description">Show desktop notifications</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-browser-notify">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Sound Alerts</span>
+                                    <span class="setting-description">Play sound for new notifications</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-sound">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Display Settings -->
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <i class="fa-solid fa-table-columns"></i>
+                            <h3>Display Options</h3>
+                        </div>
+                        <div class="settings-card-body">
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Calls Per Page</span>
+                                    <span class="setting-description">Number of calls to show in table</span>
+                                </div>
+                                <select class="setting-select" id="setting-page-size">
+                                    <option value="10">10</option>
+                                    <option value="25" selected>25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Auto-Refresh</span>
+                                    <span class="setting-description">Automatically refresh data</span>
+                                </div>
+                                <select class="setting-select" id="setting-auto-refresh">
+                                    <option value="0">Off</option>
+                                    <option value="30">Every 30 seconds</option>
+                                    <option value="60" selected>Every minute</option>
+                                    <option value="300">Every 5 minutes</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Date Format</span>
+                                    <span class="setting-description">How dates are displayed</span>
+                                </div>
+                                <select class="setting-select" id="setting-date-format">
+                                    <option value="relative">Relative (2 hours ago)</option>
+                                    <option value="short" selected>Short (Dec 15, 12:30 PM)</option>
+                                    <option value="full">Full (December 15, 2025)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Account Info -->
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <i class="fa-solid fa-user-circle"></i>
+                            <h3>Account</h3>
+                        </div>
+                        <div class="settings-card-body">
+                            <div class="account-info">
+                                <img src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff&size=80"
+                                    id="settings-avatar" alt="User" class="account-avatar">
+                                <div class="account-details">
+                                    <span class="account-name" id="settings-name">Loading...</span>
+                                    <span class="account-email" id="settings-email">...</span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <span class="setting-label">Session</span>
+                                    <span class="setting-description">Current login session</span>
+                                </div>
+                                <span class="session-badge">
+                                    <i class="fa-solid fa-circle"></i>
+                                    Active
+                                </span>
+                            </div>
+                            <button class="settings-action-btn danger" id="settings-logout">
+                                <i class="fa-solid fa-right-from-bracket"></i>
+                                Sign Out
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Settings Button -->
+                <div class="settings-footer">
+                    <button class="btn btn-secondary" id="reset-settings">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        Reset to Defaults
+                    </button>
+                    <button class="btn btn-primary" id="save-settings">
+                        <i class="fa-solid fa-check"></i>
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/static/js/settings.js?v=1.1"></script>
+</body>
+
+</html>

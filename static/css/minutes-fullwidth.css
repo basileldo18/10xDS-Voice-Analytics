@@ -1,0 +1,22 @@
+/* Full-width minutes items for translated content */
+.minutes-meta-item.full-width {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.minutes-meta-item.full-width .minutes-label {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--accent-primary);
+}
+
+.minutes-meta-item.full-width .minutes-value {
+    font-weight: 400;
+    width: 100%;
+    line-height: 1.6;
+}
+
+.minutes-content-sections {
+    margin-top: 16px;
+}

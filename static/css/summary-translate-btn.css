@@ -1,0 +1,82 @@
+/* ============================================
+   Summary Translation Button & Header
+   ============================================ */
+
+.summary-translate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid rgba(99, 102, 241, 0.15);
+}
+
+.summary-main-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.summary-translate-dropdown {
+    position: relative;
+}
+
+.summary-translate-btn {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%);
+    backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(99, 102, 241, 0.25);
+    color: var(--accent-primary);
+    padding: 8px 16px;
+    border-radius: var(--radius-lg);
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+}
+
+.summary-translate-btn i:first-child {
+    font-size: 16px;
+}
+
+.summary-translate-btn i:last-child {
+    font-size: 12px;
+    transition: transform 0.3s ease;
+}
+
+.summary-translate-btn:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.summary-translate-dropdown:hover .summary-translate-btn i:last-child {
+    transform: rotate(180deg);
+}
+
+.summary-translate-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 180px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 1000;
+    animation: dropdownSlideIn 0.2s ease-out;
+}
+
+.summary-translate-menu.active {
+    display: flex;
+}

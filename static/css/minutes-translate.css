@@ -1,0 +1,126 @@
+/* ============================================
+   Minutes Translation Button & Dropdown
+   ============================================ */
+
+.minutes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.minutes-translate-dropdown {
+    position: relative;
+}
+
+.minutes-translate-btn {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%);
+    backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(99, 102, 241, 0.25);
+    color: var(--accent-primary);
+    padding: 8px 16px;
+    border-radius: var(--radius-lg);
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+}
+
+.minutes-translate-btn i:first-child {
+    font-size: 16px;
+}
+
+.minutes-translate-btn i:last-child {
+    font-size: 12px;
+    transition: transform 0.3s ease;
+}
+
+.minutes-translate-btn:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.minutes-translate-dropdown:hover .minutes-translate-btn i:last-child {
+    transform: rotate(180deg);
+}
+
+.minutes-translate-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 180px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 1000;
+    animation: dropdownSlideIn 0.2s ease-out;
+}
+
+.minutes-translate-menu.active {
+    display: flex;
+}
+
+@keyframes dropdownSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.translate-option {
+    background: transparent;
+    border: none;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s ease;
+    text-align: left;
+    width: 100%;
+}
+
+.translate-option:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.05) 100%);
+    color: var(--accent-primary);
+}
+
+.lang-flag {
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .minutes-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .minutes-translate-menu {
+        right: auto;
+        left: 0;
+    }
+}

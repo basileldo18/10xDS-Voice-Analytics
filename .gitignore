@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+.idea/
+.vscode/
+*.log
+*.sqlite3
+token.json
+credentials.json
+client_secret.json
+uploads/

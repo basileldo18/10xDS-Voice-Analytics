@@ -1,0 +1,92 @@
+/* ============================================
+   Modal Audio Section - Fix for Long Filenames
+   ============================================ */
+
+.modal-audio-section {
+    max-width: 100%;
+    overflow: hidden;
+}
+
+/* Ensure audio player stays within modal */
+#modal-audio {
+    max-width: 100%;
+    width: 100%;
+}
+
+/* If there's any text/filename near audio, truncate it */
+.modal-audio-section * {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Audio status text truncation */
+#audio-status {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Modal header info (where filename might appear) */
+.modal-header-info {
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.modal-header-info h3,
+.modal-header-info p,
+.modal-header-info span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* File name display */
+.modal-file-name,
+.file-name {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+}
+
+/* Modal filename in header - truncate if too long */
+#modal-filename {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Modal title section - ensure it doesn't overflow */
+.modal-title-section {
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.modal-title-info {
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.title-with-badge {
+    max-width: 100%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.title-with-badge h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+}
