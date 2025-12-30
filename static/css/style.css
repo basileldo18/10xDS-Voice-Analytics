@@ -7280,3 +7280,97 @@ img {
     color: var(--text-primary);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
+
+/* ================ Live Transcript Modal ================ */
+.glass-modal-container {
+    max-width: 900px !important;
+    /* WIDER */
+    width: 90% !important;
+    height: 85vh !important;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-glass-strong) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+    border: var(--glass-border) !important;
+    box-shadow: var(--shadow-2xl) !important;
+    border-radius: var(--radius-2xl) !important;
+    overflow: hidden;
+    animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-modal-header {
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: var(--glass-border-light);
+    padding: var(--space-5) var(--space-8);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.glass-modal-header h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    letter-spacing: -0.01em;
+}
+
+.glass-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-6) var(--space-8);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0) 100%);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+/* Scrollbar refinement */
+.glass-modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.glass-modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.glass-modal-body::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.2);
+    border-radius: 10px;
+}
+
+.glass-modal-footer {
+    background: rgba(255, 255, 255, 0.1);
+    border-top: var(--glass-border-light);
+    padding: var(--space-4) var(--space-8);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Chat Bubble Enhancements for Glass Theme */
+.glass-modal-body .msg-text {
+    backdrop-filter: none;
+    box-shadow: var(--shadow-sm) !important;
+    transition: transform var(--transition-fast);
+}
+
+.glass-modal-body .msg-text:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md) !important;
+}
+
+@keyframes modalSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}

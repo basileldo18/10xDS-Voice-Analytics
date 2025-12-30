@@ -62,17 +62,19 @@
                             <span>Dashboard</span>
                         </a>
                     </li>
-                    <li class="nav-item" data-section="calls">
-                        <a href="#calls-section" class="nav-link" id="nav-calls">
-                            <i class="fa-solid fa-phone"></i>
-                            <span>Calls</span>
-                            <span class="nav-badge" id="call-count-badge">0</span>
-                        </a>
-                    </li>
+
                     <li class="nav-item" data-section="analytics">
                         <a href="#analytics-section" class="nav-link" id="nav-analytics">
                             <i class="fa-solid fa-chart-bar"></i>
                             <span>Analytics</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" data-section="live-calls">
+                        <a href="#live-calls-section" class="nav-link" id="nav-live-calls">
+                            <i class="fa-solid fa-headset"></i>
+                            <span>Live Calls</span>
+                            <span class="nav-badge pulse" id="live-call-count"
+                                style="display:none; background: #ef4444;">Live</span>
                         </a>
                     </li>
                 </ul>
@@ -175,6 +177,32 @@
                         <span class="stat-label">Avg. Duration</span>
                         <h3 class="stat-value" id="avg-duration">--:--</h3>
                     </div>
+                </div>
+            </section>
+
+            <!-- LIVE CALLS SECTION (Hidden by default) -->
+            <section class="content-section" id="live-calls-section" style="display: none;">
+                <div class="section-header">
+                    <h2>Live & Recent Calls</h2>
+                    <button class="btn-primary" id="refresh-live-calls">
+                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Call ID</th>
+                                <th>Started At</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="live-calls-table-body">
+                            <!-- Rows injected here via JS -->
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
@@ -1099,186 +1127,75 @@
         </div>
     </div>
 
+    <!-- Live Transcript Modal -->
+    <!-- Live Transcript Modal (Refactored) -->
+    <div class="modal" id="live-transcript-modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-wide glass-modal-container">
+            <div class="modal-header-single glass-modal-header">
+                <!-- Left: Title with Live Badge -->
+                <div class="modal-title-section">
+                    <i class="fa-solid fa-tower-broadcast modal-icon" style="color: #ef4444;"></i>
+                    <div class="modal-title-info">
+                        <div class="title-with-badge">
+                            <h2>Live Transcript</h2>
+                            <span class="speaker-badge-inline">
+                                <i class="fa-solid fa-circle pulse" style="color: #22c55e; font-size: 8px;"></i>
+                                <span id="live-connection-status">Connecting...</span>
+                            </span>
+                        </div>
+                        <div class="modal-meta-inline">
+                            <span class="meta-badge"><i class="fa-solid fa-fingerprint"></i> <span
+                                    id="live-call-id">--</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="close-modal" id="close-live-modal" aria-label="Close modal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body glass-modal-body" id="live-transcript-container">
+                <!-- Live messages appear here -->
+                <div class="empty-state">
+                    <div class="loader-spinner" style="border-top-color:#9344B3; width:30px; height:30px;"></div>
+                    <p>Waiting for speech...</p>
+                </div>
+            </div>
+
+            <div class="modal-footer glass-modal-footer">
+                <button class="btn btn-secondary" id="close-live-modal-btn">
+                    Close
+                </button>
+                <button class="btn btn-primary" id="copy-live-btn"
+                    style="background: var(--accent-gradient); border: none;">
+                    <i class="fa-solid fa-copy"></i> Copy
+                </button>
+            </div>
+        </div>
+    </div>
+    </span>
+    </div>
+    </div>
+    </div>
+
     <!-- Toast Notifications Container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <!-- Vapi Widget -->
-    <script src="https://unpkg.com/@vapi-ai/client-sdk-react/dist/embed/widget.umd.js" async
-        type="text/javascript"></script>
-
+    <!-- ✅ SIMPLE VAPI WIDGET -->
     <vapi-widget public-key="{{ vapi_public_key }}" assistant-id="{{ vapi_assistant_id }}" mode="voice"
         position="bottom-right" theme="light" button-base-color="#3F0067" button-accent-color="#ffffff"
-        base-color="#ffffff" accent-color="#9344B3"
-        icon="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgiIGhlaWdodD0iMjgiIHZpZXdCb3g9IjAgMCAyNTMgMjU0IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxjaXJjbGUgY3g9IjEyNi41IiBjeT0iMTI2LjUiIHI9Ijk2LjE0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS13aWR0aD0iMSIgb3BhY2l0eT0iMC4wNSI+PC9jaXJjbGU+PHJlY3QgeD0iMTE2LjM4IiB5PSI2LjMyNDk5OTk5OTk5OTk5OSIgd2lkdGg9IjIwLjI0MDAwMDAwMDAwMDAwMiIgaGVpZ2h0PSI0OC4wNyIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSI+PC9yZWN0PjxyZWN0IHg9IjE1MS4xMDk3NzM3ODcyMzI4OCIgeT0iMTMuNjY1NDEzOTgyNzEyMjk1IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjQ2LjM3MzQxMTc2NDcwNTg4IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgyMS4xNzY0NzA1ODgyMzUzMDQgMTYxLjIyOTc3Mzc4NzIzMjkgMzYuODUyMTE5ODY1MDY1MjM0KSI+PC9yZWN0PjxyZWN0IHg9IjE4MS4xNDkwOTkxODAxOCIgeT0iMzMuMTEzMjcwOTMzNjk5OTUiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iNDQuNjc2ODIzNTI5NDExNzYiIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDQyLjM1Mjk0MTE3NjQ3MDU5NCAxOTEuMjY5MDk5MTgwMTggNTUuNDUxNjgyNjk4NDA1ODMpIj48L3JlY3Q+PHJlY3QgeD0iMjAyLjQ0MDk5ODgzMDg3NTY5IiB5PSI2Mi4xNTY1OTY4Mjg1ODQ3OTYiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iNDIuOTgwMjM1Mjk0MTE3NjQiIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDYzLjUyOTQxMTc2NDcwNTg4NCAyMTIuNTYwOTk4ODMwODc1NyA4My42NDY3MTQ0NzU2NDM2MikiPjwvcmVjdD48cmVjdCB4PSIyMTIuMTA5ODgzNzA5MDA0NjMiIHk9Ijk2Ljk4NzQ5NjM5MTc4NjM4IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjQxLjI4MzY0NzA1ODgyMzUyNiIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSIgdHJhbnNmb3JtPSJyb3RhdGUoODQuNzA1ODgyMzUyOTQxMTcgMjIyLjIyOTg4MzcwOTAwNDY0IDExNy42MjkzMTk5MjExOTgxNSkiPjwvcmVjdD48cmVjdCB4PSIyMDguODQ5OTE3MzM0NjM0ODIiIHk9IjEzMy4wMTY0MzA0NTM3NjUzNyIgd2lkdGg9IjIwLjI0MDAwMDAwMDAwMDAwMiIgaGVpZ2h0PSIzOS41ODcwNTg4MjM1Mjk0MSIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSIgdHJhbnNmb3JtPSJyb3RhdGUoMTA1Ljg4MjM1Mjk0MTE3NjQ4IDIxOC45Njk5MTczMzQ2MzQ4MyAxNTIuODA5OTU5ODY1NTMwMDYpIj48L3JlY3Q+PHJlY3QgeD0iMTkzLjEwMTM3NjIzMDcyMjIyIiB5PSIxNjUuNDkyMDU4NjQ3Mzg0MDYiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iMzcuODkwNDcwNTg4MjM1Mjk2IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgxMjcuMDU4ODIzNTI5NDExNzcgMjAzLjIyMTM3NjIzMDcyMjIzIDE4NC40MzcyOTM5NDE1MDE3KSI+PC9yZWN0PjxyZWN0IHg9IjE2Ni45OTExODgxMzkwMjkwMiIgeT0iMTkwLjE0MjkzNDI1MjU3NDUiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iMzYuMTkzODgyMzUyOTQxMTciIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDE0OC4yMzUyOTQxMTc2NDcwNCAxNzcuMTExMTg4MTM5MDI5MDMgMjA4LjIzOTg3NTQyOTA0NTA3KSI+PC9yZWN0PjxyZWN0IHg9IjEzNC4wNDU2Nzg2NDI4ODUwNiIgeT0iMjAzLjc1NDM4Njc0NDc4Njc5IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjM0LjQ5NzI5NDExNzY0NzA2IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgxNjkuNDExNzY0NzA1ODgyMzggMTQ0LjE2NTY3ODY0Mjg4NTA3IDIyMS4wMDMwMzM4MDM2MTAzMikiPjwvcmVjdD48cmVjdCB4PSI5OC43MTQzMjEzNTcxMTQ5NCIgeT0iMjAzLjc1NDM4Njc0NDc4Njc5IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjM0LjQ5NzI5NDExNzY0NzA2IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgxOTAuNTg4MjM1Mjk0MTE3NjIgMTA4LjgzNDMyMTM1NzExNDk0IDIyMS4wMDMwMzM4MDM2MTAzMikiPjwvcmVjdD48cmVjdCB4PSI2NS43Njg4MTExODYwOTcxIiB5PSIxOTAuMTQyOTM0MjUyNTc0NTIiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iMzYuMTkzODgyMzUyOTQxMTciIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDIxMS43NjQ3MDU4ODIzNTI5MyA3NS44ODg4MTExODYwOTcxIDIwOC4yMzk4NzU0MjkwNDUxKSI+PC9yZWN0PjxyZWN0IHg9IjM5LjY1ODYyMzc2OTI3Nzc3IiB5PSIxNjUuNDkyMDU4NjQ3Mzg0MDYiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iMzcuODkwNDcwNTg4MjM1Mjk2IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgyMzIuOTQxMTc2NDcwNTg4MjMgNDkuNzc4NjIzNzY5Mjc3NzcgMTg0LjQzNzI5Mzk0MTUwMTcpIj48L3JlY3Q+PHJlY3QgeD0iMjMuOTEwMDgyNjY1MzY1MTciIHk9IjEzMy4wMTY0MzA0NTM3NjUzNyIgd2lkdGg9IjIwLjI0MDAwMDAwMDAwMDAwMiIgaGVpZ2h0PSIzOS41ODcwNTg4MjM1Mjk0MSIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSIgdHJhbnNmb3JtPSJyb3RhdGUoMjU0LjExNzY0NzA1ODgyMzU0IDM0LjAzMDA4MjY2NTM2NTE3IDE1Mi44MDk5NTk4NjU1MzAwNikiPjwvcmVjdD48cmVjdCB4PSIyMC42NTAxMTYyOTA5OTUzNzQiIHk9Ijk2Ljk4NzQ5NjM5MTc4NjQyIiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjQxLjI4MzY0NzA1ODgyMzUyNiIgcng9IjEwLjEyMDAwMDAwMDAwMDAwMSIgZmlsbD0iIzAwMDAwMCIgb3BhY2l0eT0iMSIgdHJhbnNmb3JtPSJyb3RhdGUoMjc1LjI5NDExNzY0NzA1ODggMzAuNzcwMTE2MjkwOTk1Mzc1IDExNy42MjkzMTk5MjExOTgxOSkiPjwvcmVjdD48cmVjdCB4PSIzMC4zMTkwMDExNjkxMjQyOCIgeT0iNjIuMTU2NTk2ODI4NTg0ODQiIHdpZHRoPSIyMC42MTg0MDAwMDAwMDAwMDIiIGhlaWdodD0iNDIuOTgwMjM1Mjk0MTE3NjQiIHJ4PSIxMC4zMDkyMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDI5Ni40NzA1ODgyMzUyOTQxIDQwLjQzOTAwMTE2OTEyNDI4IDgzLjY0NjcxNDQ3NTY0MzY2KSI+PC9yZWN0PjxyZWN0IHg9IjUxLjYxMDkwMDgxOTgxOTkzIiB5PSIzMy4xMTMyNzA5MzM2OTk5OTQiIHdpZHRoPSIyMC4yNDAwMDAwMDAwMDAwMDIiIGhlaWdodD0iNDQuNjc2ODIzNTI5NDExNzYiIHJ4PSIxMC4xMjAwMDAwMDAwMDAwMDEiIGZpbGw9IiMwMDAwMDAiIG9wYWNpdHk9IjEiIHRyYW5zZm9ybT0icm90YXRlKDMxNy42NDcwNTg4MjM1Mjk0IDYxLjczMDkwMDgxOTgxOTk0IDU1LjQ1MTY4MjY5ODQwNTg3NSkiPjwvcmVjdD48cmVjdCB4PSI4MS42NTAyMjYyMTI3NjcxMSIgeT0iMTMuNjY1NDEzOTgyNzEyMjk1IiB3aWR0aD0iMjAuMjQwMDAwMDAwMDAwMDAyIiBoZWlnaHQ9IjQ2LjM3MzQxMTc2NDcwNTg4IiByeD0iMTAuMTIwMDAwMDAwMDAwMDAxIiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIxIiB0cmFuc2Zvcm09InJvdGF0ZSgzMzguODIzNTI5NDExNzY0NyA5MS43NzAyMjYyMTI3NjcxMSAzNi44NTIxMTk4NjUwNjUyMzQpIj48L3JlY3Q+PC9zdmc+"
-        style="transform: scale(1.3); transform-origin: bottom right; margin-bottom: 10px; margin-right: 10px;"></vapi-widget>
+        base-color="#ffffff" accent-color="#9344B3" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;">
+    </vapi-widget>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', async function () {
-            const widget = document.querySelector('vapi-widget');
-            console.log('[VAPI DEBUG] DOMContentLoaded. Widget found:', widget);
-
-            if (widget) {
-                // Ensure the element is upgraded before trusting it fully, though addEventListener usually works on hydration
-                await customElements.whenDefined('vapi-widget');
-                console.log('[VAPI DEBUG] vapi-widget element defined/upgraded.');
-
-                // 1. Standard Event Listener
-                widget.addEventListener('call-end', function (event) {
-                    console.log('[VAPI DEBUG] "call-end" event fired!', event);
-                    handleCallEnd(event.detail);
-                });
-
-                // 2. React Prop/Property Fallback (sometimes needed for React wrappers)
-                // Note: This relies on the property being exposed on the DOM node
-                // 2. Standard Event Listener (Best Practice for Custom Elements)
-                widget.addEventListener('call-end', (event) => {
-                    console.log('[VAPI DEBUG] "call-end" event triggered!', event.detail);
-                    handleCallEnd(event.detail);
-                });
-
-                // 3. Fallback Event Listener names
-                widget.addEventListener('call-ended', (event) => {
-                    console.log('[VAPI DEBUG] "call-ended" event triggered!', event.detail);
-                    handleCallEnd(event.detail);
-                });
-
-                // 4. Manual property check (React wrapper style)
-                widget.oncallend = function (detail) {
-                    console.log('[VAPI DEBUG] "oncallend" property triggered!', detail);
-                    handleCallEnd(detail);
-                };
-
-                widget.addEventListener('error', function (event) {
-                    console.error('[VAPI DEBUG] Widget error:', event.detail);
-                });
-
-                // 5. Generic Message Listener (Catch-all)
-                widget.addEventListener('message', (event) => {
-                    console.log('[VAPI DEBUG] "message" event triggered!', event);
-                    // Check if this message is actually the call end
-                    if (event.detail && (event.detail.type === 'call-end' || event.detail.status === 'ended')) {
-                        console.log('[VAPI DEBUG] Detected call end via message event!');
-                        handleCallEnd(event.detail);
-                    }
-                });
-
-                // Debug: Log everything
-                console.log('[VAPI DEBUG] Listeners attached to widget:', widget);
-
-                // DEEP INSPECTION
-                setTimeout(() => {
-                    console.log("[VAPI DEBUG] Inspecting Widget Properties:");
-                    console.dir(widget);
-
-                    // Check for internal vapi instance
-                    if (widget.vapi) {
-                        console.log("[VAPI DEBUG] Found internal 'vapi' instance on widget!");
-                        widget.vapi.on('call-end', (detail) => {
-                            console.log("[VAPI DEBUG] Internal vapi instance 'call-end' triggered!", detail);
-                            handleCallEnd(detail);
-                        });
-                        widget.vapi.on('message', (msg) => console.log("[VAPI DEBUG] Internal vapi message:", msg));
-                    }
-
-                    // Check global vapi
-                    if (window.vapi) {
-                        console.log("[VAPI DEBUG] Found global 'window.vapi'!");
-                        window.vapi.on('call-end', (detail) => {
-                            console.log("[VAPI DEBUG] Global window.vapi 'call-end' triggered!", detail);
-                            handleCallEnd(detail);
-                        });
-                    }
-                }, 3000); // Wait for SDK to initialize
-            } else {
-                console.error('[VAPI DEBUG] Critical: <vapi-widget> element not found in DOM.');
-            }
-        });
-
-        async function handleCallEnd(callDetail) {
-            console.log('[VAPI DEBUG] Handling call end with detail:', callDetail);
-            if (!callDetail) {
-                console.warn('[VAPI DEBUG] No detail provided in event.');
-                return;
-            }
-
-            // Check if we have a recording URL
-            // Checking common paths.
-            const recordingUrl = callDetail.recordingUrl || callDetail.stereoRecordingUrl || (callDetail.artifact ? callDetail.artifact.recordingUrl : null);
-
-            console.log('[VAPI DEBUG] Extracted Recording URL:', recordingUrl);
-
-            if (recordingUrl) {
-                // Determine the filename using current timestamp if not provided in detail
-                // Note: backend generates a filename if missing, but we can try to be helpful.
-                const filename = `vapi_call_${new Date().toISOString().replace(/[:.]/g, '-')}.wav`;
-
-                // Show initial toast via NotificationService which is available globally
-                if (window.notificationService) {
-                    window.notificationService.showToast('Call Ended', 'Initiating processing...', 'info', 'fa-phone-slash');
-                }
-
-                try {
-                    // Send the recording URL to our backend to start background processing
-                    // We do NOT need to await a stream here anymore. The global SSE connection handles updates.
-                    const response = await fetch('/api/vapi-call', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            recording_url: recordingUrl,
-                            filename: filename
-                        })
-                    });
-
-                    if (response.ok) {
-                        console.log('[VAPI] Backend processing triggered successfully.');
-                    } else {
-                        const errorText = await response.text();
-                        console.error('[VAPI] Failed to trigger backend processing:', errorText);
-                        if (window.notificationService) {
-                            window.notificationService.showToast('Error', 'Failed to start processing.', 'error', 'fa-triangle-exclamation');
-                        }
-                    }
-                } catch (err) {
-                    console.error('[VAPI] Error calling backend:', err);
-                    if (window.notificationService) {
-                        window.notificationService.showToast('Error', 'Network error starting processing.', 'error', 'fa-wifi');
-                    }
-                }
-            } else {
-                console.warn('[VAPI DEBUG] No recording URL found in call detail.');
-            }
-        }
-
-        // Helper for toasts (reusing existing toast logic if available or simple fallback)
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            if (!container) return;
-
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `
-            <i class="fa-solid fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'circle-exclamation' : 'info-circle'}"></i>
-            <div class="toast-content">
-                <span class="toast-message">${message}</span>
-            </div>
-            `;
-            container.appendChild(toast);
-
-            // Trigger animation
-            requestAnimationFrame(() => toast.classList.add('show'));
-
-            // Remove after 3 seconds
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 300);
-            }, 5000);
-        }
-    </script>
+    <!-- Load standard Vapi SDK script (Robust) -->
+    <script src="https://unpkg.com/@vapi-ai/client-sdk-react/dist/embed/widget.umd.js" async defer></script>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="/static/js/main.js?v=4.14"></script>
+    <script src="/static/js/main.js?v=4.17"></script>
+    <script src="/static/js/live_calls.js?v=1.4"></script>
+    <script src="/static/js/vapi_events.js?v=1.0"></script>
 </body>
 
 </html>

@@ -8,6 +8,7 @@ const SUPABASE_URL = 'https://vsnzpmeuhsjqbkviebbf.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzbnpwbWV1aHNqcWJrdmllYmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NjcyOTMsImV4cCI6MjA4MDQ0MzI5M30.4-eEKIPw5pXHacQYcjK43puRNeCow1wS93XRVv9N7iM'; // Public Anon Key
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+window.appSupabase = supabaseClient; // Use unique name to avoid conflict with library
 
 // Global Variables
 let allCalls = [];
@@ -56,39 +57,95 @@ class NotificationService {
     handleNotification(data) {
         console.log('[NOTIFY] Received:', data);
 
-        if (data.status === 'error') {
-            this.showToast('Error', data.message, 'error', 'fa-triangle-exclamation');
-        } else if (data.status === 'success' || data.status === 'complete') {
-            // Specific check for Drive Upload
-            if (data.step === 'upload') {
-                this.showToast('Google Drive', data.message, 'success', 'fa-google-drive');
-            } else if (data.step === 'done') {
-                console.log('[NOTIFY] Analysis run complete. Triggering refresh...');
-                this.showToast('Analysis Complete', data.message, 'success', 'fa-check');
+        // Handle call_ended type specifically
+        if (data.type === 'call_ended') {
+            const duration = data.duration ? `${data.duration}s` : 'Unknown';
+            const message = `Duration: ${duration}. Starting call analysis...`;
+            this.showToast('📞 Call Ended', message, 'info', 'fa-phone-slash');
 
-                // Refresh list if done - Force reset of list
-                if (typeof fetchCalls === 'function') {
-                    console.log('[NOTIFY] Calling fetchCalls(false)...');
-                    fetchCalls(false);
-                }
-                if (typeof initializeSentimentChart === 'function') initializeSentimentChart();
-            } else {
-                this.showToast(this.formatStep(data.step), data.message, 'success', 'fa-check');
+            // Show analysis started notification
+            setTimeout(() => {
+                this.showToast('🔄 Analysis Started', 'Processing recording and generating insights...', 'processing', 'fa-cog');
+            }, 500);
+            return;
+        }
+
+        // Handle different processing steps
+        if (data.step) {
+            const stepConfig = {
+                'start': { title: '🎙️ New Call', icon: 'fa-microphone', type: 'processing' },
+                'download': { title: '⬇️ Downloading', icon: 'fa-download', type: 'processing' },
+                'upload': { title: '☁️ Uploading', icon: 'fa-cloud-upload-alt', type: 'processing' },
+                'analyze': { title: '🧠 Analyzing', icon: 'fa-brain', type: 'processing' },
+                'transcribe': { title: '📝 Transcribing', icon: 'fa-file-lines', type: 'processing' },
+                'save': { title: '💾 Saving', icon: 'fa-database', type: 'processing' },
+                'done': { title: '✅ Complete', icon: 'fa-check-circle', type: 'success' },
+                'error': { title: '❌ Error', icon: 'fa-exclamation-circle', type: 'error' }
+            };
+
+            const config = stepConfig[data.step] || { title: '📋 Processing', icon: 'fa-info-circle', type: 'processing' };
+
+            // Determine type based on status
+            let toastType = config.type;
+            if (data.status === 'complete') toastType = 'success';
+            if (data.status === 'error') toastType = 'error';
+
+            // Show toast for important steps
+            if (['start', 'upload', 'done', 'error'].includes(data.step) || data.status === 'complete' || data.status === 'error') {
+                this.showToast(config.title, data.message, toastType, config.icon);
             }
-        } else {
-            // Processing/Active
-            this.showToast(this.formatStep(data.step), data.message, 'processing', 'fa-spinner fa-spin');
+
+            // Refresh dashboard when processing is complete
+            if (data.step === 'done' && data.status === 'success') {
+                console.log('[NOTIFY] Analysis complete. Preparing to refresh dashboard...');
+
+                // Show completion notification
+                this.showToast('✅ Analysis Complete', 'Call has been analyzed successfully!', 'success', 'fa-check-circle');
+
+                // Show refreshing notification after a short delay
+                setTimeout(async () => {
+                    this.showToast('🔄 Refreshing Dashboard', 'Please wait while we update the call list...', 'info', 'fa-sync');
+
+                    // Wait a moment for the notification to be visible
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    // Refresh and wait for completion
+                    try {
+                        if (typeof fetchCalls === 'function') {
+                            await fetchCalls(false);
+                        }
+                        if (typeof initializeSentimentChart === 'function') {
+                            initializeSentimentChart();
+                        }
+
+                        // Show refresh complete notification AFTER data is loaded
+                        this.showToast('✨ Dashboard Updated', 'New call data is now visible!', 'success', 'fa-sparkles');
+                    } catch (error) {
+                        console.error('[NOTIFY] Error refreshing dashboard:', error);
+                        this.showToast('⚠️ Refresh Error', 'Please refresh the page manually', 'error', 'fa-exclamation-triangle');
+                    }
+                }, 1500);
+            }
+        }
+
+        // Legacy handling for old format
+        if (data.status === 'error' && !data.step) {
+            showToast(data.message, 'error');
+        } else if ((data.status === 'success' || data.status === 'complete') && !data.step) {
+            showToast(data.message, 'success');
         }
     }
 
     formatStep(step) {
+        if (!step) return 'Processing';
+
         const map = {
             'start': 'Call Received',
             'download': 'Downloading',
             'upload': 'Google Drive',
             'analyze': 'Analyzing',
         };
-        return map[step] || step.charAt(0).toUpperCase() + step.slice(1);
+        return map[step] || (typeof step === 'string' ? step.charAt(0).toUpperCase() + step.slice(1) : 'Processing');
     }
 
     showToast(title, message, type = 'processing', iconClass = 'fa-info-circle') {
@@ -324,7 +381,8 @@ function initializeSidebarNavigation() {
         'calls': ['calls-section'],
         'analytics': ['analytics-section'],
         'reports': ['reports-section'],
-        'settings': ['settings-section']
+        'settings': ['settings-section'],
+        'live-calls': ['live-calls-section']
     };
 
     // All possible sections
@@ -333,7 +391,8 @@ function initializeSidebarNavigation() {
         'analytics-section',
         'calls-section',
         'settings-section',
-        'reports-section'
+        'reports-section',
+        'live-calls-section'
     ];
 
     // Initialize: Show only dashboard sections on load
@@ -1351,6 +1410,9 @@ function renderTable(callsInput) {
                             <i class="fa-solid fa-ellipsis-vertical"></i>
                         </button>
                         <div class="action-dropdown" id="action-menu-${call.id}">
+                            <button class="action-item" onclick="openReanalyzeModal('${call.id}')">
+                                <i class="fa-solid fa-brain"></i> Re-analyze
+                            </button>
                             <button class="action-item delete-item" onclick="openDeleteModal('${call.id}')">
                                 <i class="fa-solid fa-trash-can"></i> Delete
                             </button>
@@ -1452,6 +1514,16 @@ const deleteCallIdInput = document.getElementById('delete-call-id');
 
 function openDeleteModal(callId) {
     if (adminVerifyModal) {
+        // Restore original text if it was changed by Re-analyze
+        const title = adminVerifyModal.querySelector('.admin-modal-title');
+        const desc = adminVerifyModal.querySelector('.admin-modal-desc');
+        if (title) title.textContent = 'Delete Confirmation';
+        if (desc) desc.textContent = 'This action requires administrator privileges';
+        if (adminVerifyConfirm) {
+            adminVerifyConfirm.innerHTML = '<i class="fa-solid fa-trash-can"></i> Confirm Delete';
+            adminVerifyConfirm.onclick = null; // Use the event listener add for delete
+        }
+
         deleteCallIdInput.value = callId;
         adminPasswordInput.value = ''; // Clear previous password
         adminVerifyModal.style.display = 'flex';
@@ -1511,15 +1583,90 @@ if (adminVerifyConfirm) {
             }
         } catch (error) {
             console.error('Delete error:', error);
-            showToast('Network error occurred', 'error');
+            showToast('An error occurred during deletion', 'error');
         } finally {
             adminVerifyConfirm.disabled = false;
             adminVerifyConfirm.innerHTML = originalBtnText;
         }
     });
-
 }
-// Update Stats
+
+// Re-analyze Call Logic
+function openReanalyzeModal(callId) {
+    // Reuse the admin modal for security
+    const modal = document.getElementById('admin-verify-modal');
+    if (!modal) return;
+
+    // Change modal text temporarily
+    const title = modal.querySelector('.admin-modal-title');
+    const desc = modal.querySelector('.admin-modal-desc');
+    const confirmBtn = document.getElementById('admin-verify-confirm');
+    const passwordInput = document.getElementById('admin-password');
+
+    if (title) title.textContent = 'Re-analyze Call';
+    if (desc) desc.textContent = 'Identify speakers using improved LLM logic';
+
+    // Clear password and store ID
+    if (passwordInput) passwordInput.value = '';
+
+    if (confirmBtn) {
+        const originalText = confirmBtn.innerHTML;
+        const originalFunc = confirmBtn.onclick;
+
+        confirmBtn.innerHTML = '<i class="fa-solid fa-brain"></i> Start Re-analysis';
+
+        // Temporarily override the click handler
+        confirmBtn.onclick = async () => {
+            const password = passwordInput.value;
+            if (!password) {
+                showToast('Admin password required', 'error');
+                return;
+            }
+
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing...';
+
+            try {
+                const response = await fetch('/api/admin/reanalyze-call', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ call_id: callId, password: password })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast('Call re-analyzed successfully', 'success');
+                    // Update local data
+                    const call = allCalls.find(c => c.id == callId);
+                    if (call) {
+                        call.sentiment = result.sentiment;
+                        call.tags = result.tags;
+                        call.summary = typeof result.summary === 'string' ? result.summary : JSON.stringify(result.summary);
+                        // Refresh table and charts
+                        fetchCalls(false);
+                    }
+                    closeDeleteModal();
+                } else {
+                    showToast(result.error || 'Re-analysis failed', 'error');
+                }
+            } catch (err) {
+                console.error('Re-analysis error:', err);
+                showToast('An error occurred during analysis', 'error');
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = '<i class="fa-solid fa-brain"></i> Start Re-analysis';
+            }
+        };
+
+        // When closing the modal, we'll need to restore the original handler
+        // But since we use event listeners for the close/cancel buttons, 
+        // we can just reset it in closeDeleteModal if we wanted to be perfectly clean.
+        // For now, openDeleteModal also resets the button text and has its own handler (which is an event listener add, so we should be careful about multiple listeners).
+    }
+
+    modal.style.display = 'flex';
+}
 // ============================================
 function updateStats(data) {
     const totalEl = document.getElementById('total-calls');
@@ -1756,6 +1903,16 @@ window.openModal = function (callId) {
         console.log('[DIARIZATION DEBUG] call.speaker_count:', call.speaker_count);
         console.log('[DIARIZATION DEBUG] diarizationData length:', diarizationData.length);
 
+        // Try to get speaker identification from summary if available
+        let detectedSpeakers = {};
+        try {
+            const sData = typeof call.summary === 'string' ? JSON.parse(call.summary) : call.summary;
+            detectedSpeakers = sData.detected_speakers || {};
+            if (sData.summary && sData.summary.detected_speakers) {
+                detectedSpeakers = sData.summary.detected_speakers;
+            }
+        } catch (e) { }
+
         // Show speaker count badge next to filename
         const speakerBadge = document.getElementById('speaker-badge-display');
         const speakerCountText = document.getElementById('speaker-count-text');
@@ -1790,7 +1947,14 @@ window.openModal = function (callId) {
                         speakerMap[originalSpeaker] = `Speaker ${speakerIndex}`;
                         speakerIndex++;
                     }
-                    displaySpeaker = speakerMap[originalSpeaker];
+                    const mappedSpeaker = speakerMap[originalSpeaker];
+                    // If we have an LLM-detected identity for this label, use it
+                    displaySpeaker = detectedSpeakers[mappedSpeaker] || mappedSpeaker;
+                }
+
+                // Safety: only show name part if LLM included role info after comma
+                if (typeof displaySpeaker === 'string' && displaySpeaker.includes(',')) {
+                    displaySpeaker = displaySpeaker.split(',')[0].trim();
                 }
 
                 const timestamp = formatTimestamp(utterance.start);
@@ -2130,6 +2294,16 @@ window.openModal = function (callId) {
         const diarizationData = call.diarization_data || [];
         const speakerCount = call.speaker_count || 0;
 
+        // Extract detected speakers from summary
+        let detectedSpeakers = {};
+        try {
+            if (summaryData && summaryData.detected_speakers) {
+                detectedSpeakers = summaryData.detected_speakers;
+            }
+        } catch (e) {
+            console.error('[MINUTES] Error extracting detected speakers:', e);
+        }
+
         if (speakerCount > 0 || diarizationData.length > 0) {
             // Extract unique speaker names from diarization data
             const uniqueSpeakers = new Set();
@@ -2139,12 +2313,20 @@ window.openModal = function (callId) {
             diarizationData.forEach(utterance => {
                 const originalSpeaker = utterance.speaker || 'Unknown';
                 let displayName = utterance.display_name;
+
                 if (!displayName) {
                     if (!speakerMap[originalSpeaker]) {
-                        speakerMap[originalSpeaker] = `Speaker ${speakerIndex}`;
+                        const mappedLabel = `Speaker ${speakerIndex}`;
+                        // Priority: LLM Detected -> Speaker Index
+                        speakerMap[originalSpeaker] = detectedSpeakers[mappedLabel] || mappedLabel;
                         speakerIndex++;
                     }
                     displayName = speakerMap[originalSpeaker];
+                }
+
+                // Safety: only show name part if LLM included role info after comma
+                if (typeof displayName === 'string' && displayName.includes(',')) {
+                    displayName = displayName.split(',')[0].trim();
                 }
                 uniqueSpeakers.add(displayName);
             });
@@ -2167,11 +2349,11 @@ window.openModal = function (callId) {
         minutesHtml += '<div class="minutes-section">';
         minutesHtml += '<h6><i class="fa-solid fa-bookmark"></i> Subject:</h6>';
 
-        let subject = '[Not specified]';
+        let subject = 'General inquiry or discussion';
         if (summaryData) {
-            if (summaryData.caller_intent) {
+            if (summaryData.caller_intent && summaryData.caller_intent.trim()) {
                 subject = summaryData.caller_intent;
-            } else if (summaryData.overview) {
+            } else if (summaryData.overview && summaryData.overview.trim()) {
                 // Extract first line or sentence as subject
                 const overview = summaryData.overview;
                 subject = overview.split('.')[0] || overview.substring(0, 100);
@@ -2203,18 +2385,28 @@ window.openModal = function (callId) {
             }
 
             // 3. Issue Identification
-            if (summaryData.issue_details) {
+            if (summaryData.issue_details && summaryData.issue_details.trim()) {
                 minutesHtml += '<div class="minutes-section">';
                 minutesHtml += '<h6><i class="fa-solid fa-exclamation-triangle"></i> 3. Issue Identification:</h6>';
                 minutesHtml += `<p>${escapeHtml(summaryData.issue_details)}</p>`;
                 minutesHtml += '</div>';
+            } else {
+                minutesHtml += '<div class="minutes-section">';
+                minutesHtml += '<h6><i class="fa-solid fa-exclamation-triangle"></i> 3. Issue Identification:</h6>';
+                minutesHtml += '<p>Brief interaction or general discussion</p>';
+                minutesHtml += '</div>';
             }
 
             // 4. Resolution / Outcome
-            if (summaryData.resolution) {
+            if (summaryData.resolution && summaryData.resolution.trim()) {
                 minutesHtml += '<div class="minutes-section">';
                 minutesHtml += '<h6><i class="fa-solid fa-check-circle"></i> 4. Resolution / Outcome:</h6>';
                 minutesHtml += `<p>${escapeHtml(summaryData.resolution)}</p>`;
+                minutesHtml += '</div>';
+            } else {
+                minutesHtml += '<div class="minutes-section">';
+                minutesHtml += '<h6><i class="fa-solid fa-check-circle"></i> 4. Resolution / Outcome:</h6>';
+                minutesHtml += '<p>Call completed</p>';
                 minutesHtml += '</div>';
             }
 
@@ -2330,14 +2522,29 @@ function setupTranslationButton(call) {
                         const speakerNameMap = {};
                         let speakerIndex = 1;
 
+                        // Try to get speaker identification from summary if available
+                        let detectedSpeakers = {};
+                        try {
+                            const sData = typeof call.summary === 'string' ? JSON.parse(call.summary) : call.summary;
+                            detectedSpeakers = sData.detected_speakers || {};
+                            if (sData.summary && sData.summary.detected_speakers) {
+                                detectedSpeakers = sData.summary.detected_speakers;
+                            }
+                        } catch (e) { }
+
                         // First pass: build map from original diarization (which has display_name from edits)
                         if (call.diarization_data && call.diarization_data.length > 0) {
                             call.diarization_data.forEach(utterance => {
                                 const originalSpeaker = utterance.speaker || 'Unknown';
                                 if (!speakerNameMap[originalSpeaker]) {
-                                    // Use saved display_name if available, otherwise create Speaker N format
-                                    speakerNameMap[originalSpeaker] = utterance.display_name || `Speaker ${speakerIndex}`;
-                                    if (!utterance.display_name) speakerIndex++;
+                                    if (utterance.display_name) {
+                                        speakerNameMap[originalSpeaker] = utterance.display_name;
+                                    } else {
+                                        const mappedLabel = `Speaker ${speakerIndex}`;
+                                        // Priority: LLM Detected -> Speaker Index
+                                        speakerNameMap[originalSpeaker] = detectedSpeakers[mappedLabel] || mappedLabel;
+                                        speakerIndex++;
+                                    }
                                 }
                             });
                         }
@@ -2354,6 +2561,11 @@ function setupTranslationButton(call) {
                                 displaySpeaker = utterance.display_name || `Speaker ${speakerIndex}`;
                                 speakerNameMap[originalSpeaker] = displaySpeaker;
                                 speakerIndex++;
+                            }
+
+                            // Safety: only show name part if LLM included role info after comma
+                            if (typeof displaySpeaker === 'string' && displaySpeaker.includes(',')) {
+                                displaySpeaker = displaySpeaker.split(',')[0].trim();
                             }
 
                             const timestamp = formatTimestamp(utterance.start);
@@ -3118,6 +3330,26 @@ function openSummaryModal(callId) {
                             <i class="fa-solid fa-circle-info"></i> Overview
                         </h4>
                         <p style="margin: 0; line-height: 1.6; color: var(--text-primary); text-align: justify;">${escapeHtml(summaryData.overview)}</p>
+                    </div>
+                `;
+            }
+
+            // Detected Speakers (New)
+            if (summaryData.detected_speakers && typeof summaryData.detected_speakers === 'object') {
+                const speakersHtml = Object.entries(summaryData.detected_speakers)
+                    .map(([label, role]) => `
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                            <span style="font-size: 11px; padding: 2px 6px; background: rgba(99, 102, 241, 0.1); color: var(--accent-primary); border-radius: 4px; font-weight: 600;">${escapeHtml(label)}</span>
+                            <span style="color: var(--text-primary); font-weight: 500;">${escapeHtml(role)}</span>
+                        </div>
+                    `).join('');
+
+                html += `
+                    <div class="summary-section" style="margin-top: 20px;">
+                        <h4 style="color: var(--accent-primary); margin: 0 0 12px 0; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-users"></i> Identified Speakers
+                        </h4>
+                        <div style="padding-left: 4px;">${speakersHtml}</div>
                     </div>
                 `;
             }

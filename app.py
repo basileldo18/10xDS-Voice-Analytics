@@ -193,32 +193,62 @@ def analyze_transcript_with_groq(text):
 
 1. Sentiment: Classify as exactly one of: "Positive", "Negative", or "Neutral"
 2. Tags: List relevant tags from these options: "Billing", "Support", "Churn Risk", "Sales", "Feedback", "Complaint", "Technical Issue"
-3. Summary: A detailed summary with the following structure:
-   - overview: A comprehensive paragraph (4-6 sentences) explaining the full context and story of the call.
-   - key_points: List of 3-5 main points discussed.
-   - caller_intent: What specifically did the caller want or need? (Explain clearly)
-   - issue_details: What was the root cause or main problem? (Provide details)
-   - resolution: How was the issue resolved, or what is the current status?
-   - action_items: Specific next steps or follow-ups needed.
-   - tone: Overall tone (e.g., "friendly", "frustrated", "professional", "urgent")
-   - meeting_date: Extract if mentioned, else null.
-   - meeting_time: Extract if mentioned, else null.
+3. Speakers: Identify the identity or role of each speaker label present in the transcript (e.g., "Speaker 0", "Speaker 1"). 
+   - **IMPORTANT**: Extract ONLY the speaker's name if mentioned (e.g., "Diana"). 
+   - NEVER combine name with role (e.g., use "Diana" NOT "Diana, Bank Representative").
+   - If the name is unknown, provide a short, single-word role (e.g., "Agent", "Customer").
+
+4. Summary: A detailed summary with the following structure:
+   
+   - **overview**: Write a comprehensive paragraph (4-6 sentences minimum) that tells the complete story of the call. Include WHO was involved, WHAT was discussed, WHY they called, and WHAT happened. Be specific and detailed.
+   
+   - **key_points**: List 3-5 specific, detailed points that were actually discussed in the call. Each point should be a complete sentence describing what was said or what happened.
+   
+   - **caller_intent**: Write 2-3 detailed sentences explaining EXACTLY what the caller wanted to achieve or accomplish in this call. Be specific about their goals, needs, or requests. 
+     ❌ BAD: "General inquiry"
+     ✅ GOOD: "The caller wanted to verify their account balance and inquire about recent transaction fees that appeared on their statement."
+   
+   - **issue_details**: Write 2-3 detailed sentences describing the SPECIFIC problem, topic, or situation that was discussed. Include relevant details like what triggered the call, what the concern was, or what information was being sought.
+     ❌ BAD: "Greeting only"
+     ✅ GOOD: "The customer noticed an unexpected $25 fee on their monthly statement and wanted to understand what it was for and whether it could be waived."
+   
+   - **resolution**: Write 2-3 detailed sentences explaining EXACTLY what was done, decided, or agreed upon. Include specific actions taken, promises made, or next steps identified.
+     ❌ BAD: "Call completed"
+     ✅ GOOD: "The agent explained that the fee was for international wire transfer and provided documentation. The customer accepted the explanation and requested email confirmation of the fee structure for future reference."
+   
+   - **action_items**: List specific, actionable next steps with WHO needs to do WHAT. If there are no action items, use an empty array.
+   
+   - **tone**: Overall tone (e.g., "friendly and cooperative", "frustrated but professional", "urgent and concerned")
+   
+   - **meeting_date**: Extract if mentioned in the conversation, else null.
+   - **meeting_time**: Extract if mentioned in the conversation, else null.
+
+**CRITICAL REQUIREMENTS**:
+- NEVER use generic one-word or two-word answers like "General inquiry", "Greeting only", "Call completed"
+- ALWAYS write detailed, specific responses based on the ACTUAL content of the transcript
+- Each field (caller_intent, issue_details, resolution) must be AT LEAST 2 complete sentences
+- Be specific about what was actually said and what actually happened
+- If the call is very short or just a greeting, describe EXACTLY what was said in detail
 
 Transcript:
-{text[:4000]}
+{text[:6000]}
 
 Respond ONLY in this exact JSON format:
 {{
     "sentiment": "Positive" or "Negative" or "Neutral",
     "tags": ["tag1", "tag2"],
+    "speakers": {{
+        "Speaker 0": "Name",
+        "Speaker 1": "Name"
+    }},
     "summary": {{
-        "overview": "Detailed 4-6 sentence paragraph summarizing the call context and outcome",
-        "key_points": ["Point 1", "Point 2", "Point 3"],
-        "caller_intent": "Clear explanation of caller's goal",
-        "issue_details": "Detailed explanation of the problem",
-        "resolution": "Outcome or resolution status",
-        "action_items": ["Next step 1", "Next step 2"],
-        "tone": "Tone description",
+        "overview": "Detailed 4-6 sentence paragraph describing the entire call",
+        "key_points": ["Detailed point 1", "Detailed point 2", "Detailed point 3"],
+        "caller_intent": "2-3 detailed sentences about what the caller specifically wanted",
+        "issue_details": "2-3 detailed sentences about the specific topic or problem discussed",
+        "resolution": "2-3 detailed sentences about what was specifically done or decided",
+        "action_items": ["Specific action 1", "Specific action 2"],
+        "tone": "Descriptive tone with adjectives",
         "meeting_date": "Date or null",
         "meeting_time": "Time or null"
     }}
@@ -226,11 +256,11 @@ Respond ONLY in this exact JSON format:
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": "You are a call analysis expert. Analyze transcripts and respond only with valid JSON. Explain everything in simple, non-technical words."},
+                {"role": "system", "content": "You are a professional call analysis expert who provides detailed, specific, and contextual analysis. NEVER use generic one-word answers. Always write detailed responses (minimum 2 sentences) based on the actual transcript content. Extract ONLY speaker names if available. Be thorough and specific in your analysis."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
-            max_tokens=1000
+            max_tokens=2000
         )
         result_text = response.choices[0].message.content.strip()
         if result_text.startswith("```"):
@@ -241,18 +271,34 @@ Respond ONLY in this exact JSON format:
         result = json.loads(result_text)
         sentiment = result.get("sentiment", "Neutral")
         tags = result.get("tags", [])
+        speakers = result.get("speakers", {})
         summary_data = result.get("summary", {})
         
+        # Ensure required fields have defaults if missing or too short
+        if not summary_data.get("caller_intent") or len(summary_data.get("caller_intent", "")) < 20:
+            summary_data["caller_intent"] = "The caller initiated contact to engage with the service or representative. The specific purpose was not clearly stated in this brief interaction."
+        if not summary_data.get("issue_details") or len(summary_data.get("issue_details", "")) < 20:
+            summary_data["issue_details"] = "This was a brief interaction or initial greeting. No specific issue or detailed topic was discussed during this short call."
+        if not summary_data.get("resolution") or len(summary_data.get("resolution", "")) < 20:
+            summary_data["resolution"] = "The call was completed as a brief interaction. No specific resolution or action was required as this appeared to be an initial contact or test call."
+        if not summary_data.get("tone"):
+            summary_data["tone"] = "Professional and courteous"
+        
+        # Merge speakers into summary data for persistence if needed, 
+        # or keep separate. The UI usually looks for 'summary'.
+        if speakers:
+            summary_data["detected_speakers"] = speakers
+
         if isinstance(summary_data, dict):
-            summary = json.dumps(summary_data)
+            summary_json = json.dumps(summary_data)
         else:
-            summary = str(summary_data)
+            summary_json = str(summary_data)
         
         if sentiment not in ["Positive", "Negative", "Neutral"]:
             sentiment = "Neutral"
         
-        print(f"[GROQ] Analysis complete - Sentiment: {sentiment}")
-        return sentiment, tags, summary
+        print(f"[GROQ] Analysis complete - Speakers detected: {list(speakers.values())}")
+        return sentiment, tags, summary_json, speakers
     except Exception as e:
         print(f"[GROQ] Error analyzing transcript: {e}")
         return None
@@ -280,13 +326,42 @@ def analyze_transcript_fallback(text):
     summary = ". ".join(sentences[:2]).strip() + "." if len(sentences) > 0 else text
     return sentiment, tags, summary
 
-def analyze_transcript(text):
-    if not text: return "Neutral", [], "No text to summarize"
+def analyze_transcript(text, diarization_data=None):
+    if not text: return "Neutral", [], "No text to summarize", {}
+    
+    # If we have diarization data, format it into a speaker-prefixed transcript
+    # to help the LLM identify roles.
+    analysis_text = text
+    if diarization_data:
+        # Sort utterances by start time to be safe
+        sorted_data = sorted(diarization_data, key=lambda x: x.get('start', 0))
+        
+        # Create a map to convert A, B, C... to Speaker 1, Speaker 2, Speaker 3...
+        speaker_map = {}
+        speaker_index = 1
+        
+        formatted_segments = []
+        for segment in sorted_data:
+            orig_speaker = segment.get('speaker', 'Unknown')
+            if orig_speaker not in speaker_map:
+                speaker_map[orig_speaker] = f"Speaker {speaker_index}"
+                speaker_index += 1
+            
+            label = speaker_map[orig_speaker]
+            segment_text = segment.get('text', '')
+            formatted_segments.append(f"{label}: {segment_text}")
+        
+        analysis_text = "\n".join(formatted_segments)
+        print(f"[ANALYSIS] Formatted transcript with {len(diarization_data)} diarized segments and {speaker_index-1} speakers.")
+
     if groq_client:
-        result = analyze_transcript_with_groq(text)
-        if result: return result
+        result = analyze_transcript_with_groq(analysis_text)
+        if result: 
+            return result
+        
     print("[ANALYSIS] Using fallback keyword analysis")
-    return analyze_transcript_fallback(text)
+    sentiment, tags, summary = analyze_transcript_fallback(text)
+    return sentiment, tags, summary, {}
 
 import requests
 
@@ -391,7 +466,32 @@ def encode_audio_to_base64(file_path):
 def process_audio_file(file_path, original_filename, drive_file_id=None, language_code=None, speakers_expected=None):
     try:
         transcript, duration_seconds, diarization_data, speaker_count, detected_lang = transcribe_audio(file_path, language_code, speakers_expected)
-        sentiment, tags, summary = analyze_transcript(transcript)
+        sentiment, tags, summary, speakers = analyze_transcript(transcript, diarization_data=diarization_data)
+        
+        # Patch diarization_data with detected speaker names
+        if speakers and diarization_data:
+            # Reconstruct the Speaker 1, 2 mapping used in analyze_transcript
+            sorted_diarization = sorted(diarization_data, key=lambda x: x.get('start', 0))
+            speaker_map = {}
+            speaker_index = 1
+            for segment in sorted_diarization:
+                orig_id = segment.get('speaker', 'Unknown')
+                if orig_id not in speaker_map:
+                    label = f"Speaker {speaker_index}"
+                    name = speakers.get(label, label)
+                    # Safety: only take the name part if LLM included a role with a comma
+                    if isinstance(name, str) and ',' in name:
+                        name = name.split(',')[0].strip()
+                    speaker_map[orig_id] = name
+                    speaker_index += 1
+                segment['display_name'] = speaker_map[orig_id]
+            
+            # Update original diarization_data with display names
+            diarization_data = sorted_diarization
+            # Update speaker count based on detected speakers if possible
+            if len(speaker_map) > 0:
+                speaker_count = len(speaker_map)
+
         email_sent = False
         
         audio_url = encode_audio_to_base64(file_path)
@@ -506,19 +606,229 @@ def sync_seen_ids_from_db():
     try:
         print("[SYNC] Synchronizing seen_ids from database...")
         # We look for Drive IDs in audio_url (assuming it contains the ID for non-base64 URLs)
-        # or we might need to store drive_file_id explicitly. 
-        # For now, let's also fetch by filename to be safe, or just rely on the fact 
-        # that already processed files shouldn't be processed again if we check DB.
-        response = supabase.table('calls').select("filename, audio_url").execute()
+        
+        # PERFORMANCE FIX 2: Reduced limit to 1000 and select ONLY audio_url
+        response = supabase.table('calls')\
+            .select("audio_url")\
+            .order('created_at', desc=True)\
+            .limit(1000)\
+            .execute()
+            
         for call in response.data:
             url = call.get('audio_url', '')
             if url and 'id=' in url:
                 # Extract ID from https://drive.google.com/uc?export=download&id=...
                 drive_id = url.split('id=')[-1].split('&')[0]
                 seen_ids.add(drive_id)
-        print(f"[SYNC] Synchronized {len(seen_ids)} IDs from database.")
+        print(f"[SYNC] Synchronized {len(seen_ids)} IDs from database (Last 1000).")
     except Exception as e:
         print(f"[SYNC] Error synchronizing from DB: {e}")
+
+# --- Vapi Webhooks ---
+
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+
+@app.post("/api/vapi-webhook")
+async def vapi_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Handle Vapi webhooks for real-time transcripts and call events.
+    """
+    try:
+        payload = await request.json()
+        message = payload.get('message', {})
+        
+        # Try to find call object in top-level or inside message
+        call_data = payload.get('call')
+        if not call_data:
+            call_data = message.get('call', {})
+            
+        # Try to find call_id
+        call_id = call_data.get('id')
+        if not call_id:
+            # Fallback: check other common locations
+            call_id = message.get('call_id') or message.get('callId') or payload.get('call_id')
+            
+        # Inject found ID back into call_data for handlers to use
+        if call_id and isinstance(call_data, dict):
+            call_data['id'] = call_id
+
+        print(f"[VAPI-WEBHOOK] Extracted Call ID: {call_id}")
+
+        message_type = message.get('type')
+        print(f"[VAPI-WEBHOOK] Message Type: {message_type}")
+        
+        if message_type == 'transcript':
+            await handle_transcript(message, call_data)
+        elif message_type == 'end-of-call-report':
+            await handle_end_of_call(message, call_data, background_tasks)
+        elif message_type == 'status-update':
+            await handle_status_update(message, call_data)
+            
+        return JSONResponse(status_code=200, content={"success": True})
+    except Exception as e:
+        print(f"[VAPI-WEBHOOK] Error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+async def handle_transcript(message: dict, call_data: dict):
+    """Save final transcripts to Supabase."""
+    transcript_type = message.get('transcriptType')
+    role = message.get('role')
+    transcript = message.get('transcript')
+    print(transcript)
+    if transcript_type != 'final' or not transcript:
+        return
+
+    if not supabase:
+        print("[VAPI-WEBHOOK] Error: Supabase client not initialized")
+        return
+
+    try:
+        # IST Timezone (UTC + 5:30)
+        ist_time = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+        
+        # 1. Check the LAST saved transcript for this call
+        # Order by ID desc to get the very latest
+        last_res = supabase.table('transcripts').select("*").eq('call_id', call_data.get('id')).order('id', desc=True).limit(1).execute()
+        
+        last_entry = last_res.data[0] if last_res.data else None
+        
+        # 2. If valid last entry exists and ROLE MATCHES current role -> MERGE (Update)
+        if last_entry and last_entry.get('role') == role:
+            prev_text = last_entry.get('transcript', '')
+            # Simple spacing check
+            new_text = f"{prev_text.strip()} {transcript.strip()}"
+            
+            # Update the existing row
+            supabase.table('transcripts').update({
+                'transcript': new_text,
+                'timestamp': ist_time.isoformat() # Update timestamp to latest utterance
+            }).eq('id', last_entry['id']).execute()
+            
+            print(f"[VAPI-WEBHOOK] Merged transcript ({role}): ... {transcript[:30]}...")
+            
+        else:
+            # 3. Else (New Speaker or First Entry) -> INSERT
+            data = {
+                'call_id': call_data.get('id'),
+                'role': role,
+                'transcript': transcript,
+                'transcript_type': transcript_type,
+                'timestamp': ist_time.isoformat()
+            }
+            
+            supabase.table('transcripts').insert(data).execute()
+            print(f"[VAPI-WEBHOOK] Saved new turn ({role}): {transcript[:30]}...")
+
+    except Exception as e:
+        print(f"[VAPI-WEBHOOK] DB Error (Transcript): {e}")
+
+async def handle_end_of_call(message: dict, call_data: dict, background_tasks: BackgroundTasks = None):
+    """Save call summary and trigger background processing if recording exists."""
+    
+    # 1. Send immediate dashboard notification when call ends
+    try:
+        call_id = call_data.get('id', 'Unknown')
+        duration = call_data.get('duration', 0)
+        ended_reason = message.get('endedReason', 'Unknown')
+        
+        # Broadcast to dashboard
+        notification_payload = {
+            "type": "call_ended",
+            "call_id": call_id,
+            "duration": duration,
+            "ended_reason": ended_reason,
+            "message": f"Call {call_id} ended ({ended_reason}). Processing recording...",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        await notification_manager.broadcast(json.dumps(notification_payload))
+        print(f"[VAPI-WEBHOOK] Dashboard notification sent for call {call_id}")
+    except Exception as e:
+        print(f"[VAPI-WEBHOOK] Error sending dashboard notification: {e}")
+    
+    # 2. Trigger Audio Processing (Drive Upload + Analysis)
+    recording_url = message.get('recordingUrl') or message.get('recording_url')
+    # Fallback to stereo
+    if not recording_url:
+        recording_url = message.get('stereoRecordingUrl') or message.get('stereo_recording_url')
+        
+    if recording_url and background_tasks:
+        print(f"[VAPI-WEBHOOK] Found recording URL: {recording_url}")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"vapi_call_{timestamp}.wav"
+        safe_name = secure_filename(filename)
+        temp_path = os.path.join(UPLOAD_FOLDER, safe_name)
+        
+        print(f"[VAPI-WEBHOOK] Triggering background processing for {safe_name}")
+        background_tasks.add_task(process_vapi_call_background, recording_url, temp_path, safe_name, notification_manager)
+    else:
+        print("[VAPI-WEBHOOK] No recording URL found (or no background tasks), skipping file processing.")
+
+    # 3. Save Report to Database
+    if not supabase: return
+
+    try:
+        data = {
+            'call_id': call_data.get('id'),
+            'ended_reason': message.get('endedReason'),
+            'summary': message.get('summary'),
+            'recording_url': recording_url,
+            'duration': call_data.get('duration'),
+            'cost': call_data.get('cost'),
+            # 'ended_at': datetime.now(timezone.utc).isoformat() 
+        }
+        
+        supabase.table('call_reports').insert(data).execute()
+        print(f"[VAPI-WEBHOOK] Saved End of Call Report for {data['call_id']}")
+
+        # FALLBACK: Explicitly mark call as ended in vapi_calls table
+        supabase.table('vapi_calls').update({
+            'status': 'ended',
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('call_id', call_data.get('id')).execute()
+        print(f"[VAPI-WEBHOOK] Force-updated status to 'ended' for {data['call_id']}")
+    except Exception as e:
+        print(f"[VAPI-WEBHOOK] DB Error (Report/Status Fallback): {e}")
+
+async def handle_status_update(message: dict, call_data: dict):
+    """Track call status."""
+    if not supabase: return
+
+    try:
+        status = message.get('status')
+        call_id = call_data.get('id')
+        
+        # Only track essential statuses to avoid premature "Live" display
+        if status not in ['in-progress', 'ended']:
+            print(f"[VAPI-WEBHOOK] Ignoring status update: {call_id} -> {status}")
+            return
+            
+        print(f"[VAPI-WEBHOOK] Call Status Update: {call_id} -> {status}")
+        
+        supabase.table('vapi_calls').upsert({
+            'call_id': call_id,
+            'status': status,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).execute()
+    except Exception as e:
+        print(f"[VAPI-WEBHOOK] DB Error (Status): {e}")
+
+
+@app.get("/api/transcripts/{call_id}")
+async def get_transcripts(call_id: str):
+    """Fetch transcripts for a specific call (Bypasses RLS)."""
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Fetch transcripts sorted by timestamp
+        response = supabase.table('transcripts').select('*').eq('call_id', call_id).order('timestamp').execute()
+        return response.data
+    except Exception as e:
+        print(f"Error fetching transcripts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- Webhook & Background Tasks ---
 
@@ -579,6 +889,10 @@ async def index(request: Request, user_id: str = Depends(login_required)):
 @app.get("/settings", response_class=HTMLResponse)
 async def settings(request: Request, user_id: str = Depends(login_required)):
     return templates.TemplateResponse("settings.html", {"request": request})
+
+@app.get("/debug", response_class=HTMLResponse)
+async def debug_page(request: Request):
+    return templates.TemplateResponse("debug_chat.html", {"request": request})
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -643,66 +957,126 @@ async def save_settings(settings: UserSettings, user_id: str = Depends(login_req
     except Exception as e:
         print(f"[SETTINGS] Error saving settings: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+        
+# Helper function to run blocking Supabase calls in a thread
+
+# Helper function to run blocking Supabase calls in a thread
+def run_query(query_builder):
+    return query_builder.execute()
 
 @app.get("/api/calls")
 async def get_calls(user_id: str = Depends(get_current_user), offset: int = 0, limit: int = 20):
     if not supabase: return {"calls": [], "total": 0, "stats": {}}
+    
     try:
-        # 1. Main paginated query
-        response = supabase.table('calls')\
-            .select("*", count="exact")\
-            .order('created_at', desc=True)\
-            .range(offset, offset + limit - 1)\
-            .execute()
-            
-        # 2. Stats query - fetch minimal data for ALL rows to calculate global dashboard metrics
-        # Performance: Fetching only 3 small columns is efficient even with thousands of rows
-        stats_response = supabase.table('calls').select("sentiment, duration, tags").execute()
-        all_data = stats_response.data or []
-        
-        total_count = response.count
-        
-        # Calculate Sentiment Global Stats
-        pos_count = 0
-        neg_count = 0
-        neu_count = 0
-        for c in all_data:
-            sent = (c.get('sentiment') or 'neutral').lower()
-            if sent == 'positive': pos_count += 1
-            elif sent == 'negative': neg_count += 1
-            else: neu_count += 1
-            
-        # Calculate Average Duration
-        durations = [c.get('duration', 0) for c in all_data if c.get('duration') is not None]
-        avg_duration = sum(durations) / len(durations) if durations else 0
-        
-        # Calculate Tag Counts
-        tag_counts = {'Support': 0, 'Billing': 0, 'Technical': 0}
-        for c in all_data:
-            tags = c.get('tags') or []
-            # Match frontend logic for tag classification
-            for tag in tags:
-                lower = tag.lower()
-                if 'support' in lower or 'help' in lower: tag_counts['Support'] += 1
-                if 'bill' in lower or 'payment' in lower or 'invoice' in lower: tag_counts['Billing'] += 1
-                if 'technical' in lower or 'issue' in lower or 'error' in lower or 'bug' in lower: tag_counts['Technical'] += 1
+        t_start = time.time()
+        print(f"[API CHECK] Starting Optimized Parallel Queries...")
 
-        return {
-            "calls": response.data, 
-            "total": total_count,
-            "stats": {
+        # Main query (this is fast - 2ms)
+        main_query = supabase.table('calls')\
+            .select("id, filename, sentiment, tags, summary, duration, created_at, speaker_count, email_sent, transcript, audio_url, diarization_data", count="estimated")\
+            .order('created_at', desc=True)\
+            .range(offset, offset + limit - 1)
+
+        # CRITICAL FIX: Always try database function first
+        use_db_function = False
+        stats_data = {}
+        
+        try:
+            print("[API CHECK] Trying database function...")
+            stats_result = await asyncio.to_thread(
+                lambda: supabase.rpc('get_call_stats').execute()
+            )
+            if stats_result.data:
+                stats_data = stats_result.data
+                use_db_function = True
+                print("[API CHECK] Using database function for stats!")
+        except Exception as e:
+            print(f"[API CHECK] Database function failed: {e}, using fallback")
+            use_db_function = False
+
+        # Execute main query
+        response = await asyncio.to_thread(run_query, main_query)
+
+        if use_db_function:
+            # Stats already computed by database
+            stats = {
                 "sentiment": {
-                    "positive": pos_count,
-                    "negative": neg_count,
-                    "neutral": neu_count
+                    "positive": stats_data.get('positive', 0),
+                    "negative": stats_data.get('negative', 0),
+                    "neutral": stats_data.get('neutral', 0)
                 },
-                "avg_duration": avg_duration,
-                "tag_counts": tag_counts
+                "avg_duration": round(stats_data.get('avg_duration', 0), 2),
+                "tag_counts": {
+                    "Support": stats_data.get('support', 0),
+                    "Billing": stats_data.get('billing', 0),
+                    "Technical": stats_data.get('technical', 0)
+                }
+            }
+        else:
+            # Fallback: Drastically reduce the limit
+            stats_query = supabase.table('calls')\
+                .select("sentiment, duration, tags")\
+                .order('created_at', desc=True)\
+                .limit(50)  # Reduced to 50 rows only
+            
+            stats_response = await asyncio.to_thread(run_query, stats_query)
+            all_data = stats_response.data or []
+            
+            # Calculate stats from limited dataset
+            stats = {
+                "sentiment": {"positive": 0, "negative": 0, "neutral": 0},
+                "avg_duration": 0,
+                "tag_counts": {"Support": 0, "Billing": 0, "Technical": 0}
+            }
+            
+            total_duration = 0
+            valid_duration_count = 0
+            
+            for c in all_data:
+                sent = (c.get('sentiment') or 'neutral').lower()
+                if sent == 'positive': 
+                    stats["sentiment"]["positive"] += 1
+                elif sent == 'negative': 
+                    stats["sentiment"]["negative"] += 1
+                else: 
+                    stats["sentiment"]["neutral"] += 1
+
+                dur = c.get('duration')
+                if dur is not None:
+                    total_duration += dur
+                    valid_duration_count += 1
+
+                tags = c.get('tags', [])
+                if tags:
+                    tags_lower = {tag.lower() for tag in tags}
+                    if 'support' in tags_lower or 'help' in tags_lower:
+                        stats["tag_counts"]["Support"] += 1
+                    if any(t in tags_lower for t in ['billing', 'payment', 'invoice']):
+                        stats["tag_counts"]["Billing"] += 1
+                    if any(t in tags_lower for t in ['technical', 'technical issue', 'error', 'bug']):
+                        stats["tag_counts"]["Technical"] += 1
+            
+            stats["avg_duration"] = round(total_duration / valid_duration_count, 2) if valid_duration_count > 0 else 0
+
+        t_end = time.time()
+        print(f"[API CHECK] Optimized Query Completed in {t_end - t_start:.4f}s")
+        
+        return {
+            "calls": response.data,
+            "total": response.count,
+            "stats": stats,
+            "debug_timing": {
+                "total_sec": round(t_end - t_start, 4),
+                "using_db_function": use_db_function
             }
         }
+
     except Exception as e:
         print(f"[API] Error fetching calls: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+             
 
 
 @app.put("/api/calls/{call_id}/diarization")
@@ -894,6 +1268,79 @@ async def delete_call(req: DeleteCallRequest):
         if "Invalid login credentials" in str(e): return JSONResponse(status_code=401, content={"error": "Invalid admin password"})
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+@app.post("/api/admin/reanalyze-call")
+async def reanalyze_call(req: Dict[str, Any]):
+    """Re-run LLM analysis on an existing call to improve speaker detection."""
+    call_id = req.get("call_id")
+    password = req.get("password")
+    
+    if not supabase: return JSONResponse(status_code=500, content={"error": "Database error"})
+    if not call_id: return JSONResponse(status_code=400, content={"error": "Call ID required"})
+
+    try:
+        # Verify admin
+        temp_sb = create_client(url, key)
+        auth = temp_sb.auth.sign_in_with_password({"email": "admin@10xds.com", "password": password})
+        if not auth.user: return JSONResponse(status_code=401, content={"error": "Invalid admin password"})
+
+        # Fetch existing call
+        res = supabase.table('calls').select("*").eq('id', call_id).execute()
+        if not res.data: return JSONResponse(status_code=404, content={"error": "Call not found"})
+        
+        call_data = res.data[0]
+        transcript = call_data.get("transcript")
+        diarization_data = call_data.get("diarization_data")
+        
+        if not transcript:
+            return JSONResponse(status_code=400, content={"error": "No transcript available for re-analysis"})
+
+        print(f"[REANALYZE] Re-running analysis for call {call_id}...")
+        
+        # Run improved analysis
+        sentiment, tags, summary, speakers = analyze_transcript(transcript, diarization_data=diarization_data)
+        
+        # Patch diarization_data if we have speaker detection
+        if speakers and diarization_data:
+            sorted_diarization = sorted(diarization_data, key=lambda x: x.get('start', 0))
+            speaker_map = {}
+            speaker_index = 1
+            for segment in sorted_diarization:
+                orig_id = segment.get('speaker', 'Unknown')
+                if orig_id not in speaker_map:
+                    label = f"Speaker {speaker_index}"
+                    name = speakers.get(label, label)
+                    # Safety: only take the name part if LLM included a role with a comma
+                    if isinstance(name, str) and ',' in name:
+                        name = name.split(',')[0].strip()
+                    speaker_map[orig_id] = name
+                    speaker_index += 1
+                segment['display_name'] = speaker_map[orig_id]
+            diarization_data = sorted_diarization
+
+        # Update record
+        update_data = {
+            "sentiment": sentiment,
+            "tags": tags,
+            "summary": summary,
+            "diarization_data": diarization_data,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        supabase.table('calls').update(update_data).eq('id', call_id).execute()
+        
+        return {
+            "success": True, 
+            "message": "Call re-analyzed successfully",
+            "sentiment": sentiment,
+            "tags": tags,
+            "summary": json.loads(summary) if isinstance(summary, str) and summary.startswith('{') else summary
+        }
+
+    except Exception as e:
+        print(f"[REANALYZE] Error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 
 
 # --- Notification System (Global SSE) ---
@@ -1038,7 +1485,7 @@ async def handle_vapi_call(request: Request, background_tasks: BackgroundTasks):
     try:
         # Get raw JSON payload
         payload = await request.json()
-        print(f"\n{'='*60}\n[VAPI WEBHOOK] Received payload:\n{json.dumps(payload, indent=2)}\n{'='*60}\n")
+
         
         # Extract recording URL from different possible locations in Vapi's payload
         recording_url = None
