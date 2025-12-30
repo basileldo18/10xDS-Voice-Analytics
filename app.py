@@ -105,68 +105,130 @@ def send_email_notification(filename, sentiment, tags, summary):
         return False
     
     try:
+        # Parse summary JSON if it's a string
+        summary_data = None
+        summary_text = ""
+        
+        if isinstance(summary, str):
+            try:
+                summary_data = json.loads(summary)
+                # Get overview as the main summary
+                summary_text = summary_data.get('overview', summary)
+            except:
+                summary_text = summary
+        elif isinstance(summary, dict):
+            summary_data = summary
+            summary_text = summary_data.get('overview', str(summary))
+        else:
+            summary_text = str(summary)
+        
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"[VoxAnalyze] New Call Analyzed: {filename}"
+        msg["Subject"] = f"📞 [VoxAnalyze] New Call Analyzed: {filename}"
         msg["From"] = sender_email
         msg["To"] = EMAIL_RECIPIENT
         
         tags_str = ", ".join(tags) if tags else "None"
         
+        # Build plain text version
         text = f"""
-New Call Analysis Complete
-==========================
+============================================================
+NEW CALL ANALYSIS COMPLETE
+============================================================
 
 File: {filename}
 Sentiment: {sentiment}
 Tags: {tags_str}
 
-Summary:
-{summary}
+SUMMARY:
+------------------------------------------------------------
+{summary_text}
 
----
-VoxAnalyze Dashboard
+============================================================
+VoxAnalyze - AI-Powered Call Analysis Dashboard
+============================================================
 """
-        html = f"""
-<!DOCTYPE html>
+        
+        # Build HTML version
+        sentiment_class = sentiment.lower() if sentiment else 'neutral'
+        sentiment_colors = {
+            'positive': {'bg': '#d1fae5', 'text': '#065f46'},
+            'negative': {'bg': '#fee2e2', 'text': '#991b1b'},
+            'neutral': {'bg': '#e2e8f0', 'text': '#475569'}
+        }
+        sentiment_color = sentiment_colors.get(sentiment_class, sentiment_colors['neutral'])
+        
+        html = f"""<!DOCTYPE html>
 <html>
 <head>
     <style>
-        body {{ font-family: 'Segoe UI', Tahoma, sans-serif; background: #f8fafc; padding: 20px; }}
-        .container {{ max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-        .header {{ background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; padding: 24px; text-align: center; }}
-        .header h1 {{ margin: 0; font-size: 24px; }}
-        .content {{ padding: 24px; }}
-        .stat {{ display: inline-block; padding: 8px 16px; border-radius: 20px; margin: 4px; font-weight: 600; }}
-        .stat.positive {{ background: #d1fae5; color: #065f46; }}
-        .stat.negative {{ background: #fee2e2; color: #991b1b; }}
-        .stat.neutral {{ background: #e2e8f0; color: #475569; }}
-        .summary {{ background: #f1f5f9; padding: 16px; border-radius: 8px; margin-top: 16px; }}
-        .footer {{ text-align: center; padding: 16px; color: #94a3b8; font-size: 12px; }}
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; padding: 20px; margin: 0; }}
+        .container {{ max-width: 650px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }}
+        .header {{ background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white; padding: 32px 24px; text-align: center; }}
+        .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; }}
+        .header p {{ margin: 8px 0 0 0; opacity: 0.9; font-size: 14px; }}
+        .content {{ padding: 32px 24px; }}
+        .meta-row {{ display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 2px solid #f1f5f9; }}
+        .meta-item {{ flex: 1; min-width: 200px; }}
+        .meta-label {{ font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }}
+        .meta-value {{ font-size: 15px; color: #0f172a; font-weight: 500; }}
+        .stat {{ display: inline-block; padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 14px; }}
+        .tags {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+        .tag {{ background: #f1f5f9; color: #475569; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 500; }}
+        .summary-box {{ background: #f8fafc; padding: 20px; border-radius: 12px; line-height: 1.8; color: #334155; font-size: 15px; margin-top: 24px; border-left: 4px solid #6366f1; }}
+        .footer {{ text-align: center; padding: 24px; background: #f8fafc; color: #94a3b8; font-size: 13px; border-top: 1px solid #e2e8f0; }}
+        .footer strong {{ color: #64748b; }}
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>New Call Analyzed</h1>
+            <h1>📞 New Call Analyzed</h1>
+            <p>Call analysis summary</p>
         </div>
         <div class="content">
-            <p><strong>File:</strong> {filename}</p>
-            <p><strong>Sentiment:</strong> 
-                <span class="stat {sentiment.lower()}">{sentiment}</span>
-            </p>
-            <p><strong>Tags:</strong> {tags_str}</p>
-            <div class="summary">
-                <strong>Summary:</strong><br>
-                {summary}
+            <div class="meta-row">
+                <div class="meta-item">
+                    <div class="meta-label">File Name</div>
+                    <div class="meta-value">{filename}</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Sentiment</div>
+                    <div class="meta-value">
+                        <span class="stat" style="background: {sentiment_color['bg']}; color: {sentiment_color['text']};">{sentiment}</span>
+                    </div>
+                </div>
+            </div>
+"""
+        
+        # Tags section
+        if tags:
+            html += f"""
+            <div class="meta-row">
+                <div class="meta-item" style="flex: 1 1 100%;">
+                    <div class="meta-label">Tags</div>
+                    <div class="tags">
+"""
+            for tag in tags:
+                html += f'                        <span class="tag">{tag}</span>\n'
+            html += """                    </div>
+                </div>
+            </div>
+"""
+        
+        # Summary section
+        html += f"""
+            <div class="summary-box">
+                <strong style="color: #1e293b; font-size: 16px; display: block; margin-bottom: 12px;">Summary</strong>
+                {summary_text}
             </div>
         </div>
         <div class="footer">
-            VoxAnalyze - Call Analysis Dashboard
+            <strong>VoxAnalyze</strong> - AI-Powered Call Analysis Dashboard
         </div>
     </div>
 </body>
-</html>
-"""
+</html>"""
+        
         part1 = MIMEText(text, "plain")
         part2 = MIMEText(html, "html")
         msg.attach(part1)
