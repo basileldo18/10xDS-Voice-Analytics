@@ -1,125 +1,87 @@
-# VoxAnalyze - 10xDS Voice Analytics
+# VoxAnalyze 🤖📞
 
-**VoxAnalyze** is a powerful, AI-driven voice analytics dashboard designed to process call recordings, extract meaningful insights, and provide actionable data. Built with **FastAPI** and **Supabase**, it leverages state-of-the-art AI models for transcription and analysis.
+**VoxAnalyze** is a powerful, AI-driven call analysis dashboard designed to ingest audio calls (via upload, Google Drive sync, or Vapi live streams), transcribe them, and generate actionable insights using advanced LLMs.
 
-## ✨ Key Features
+## 🚀 Features
 
-*   **🎙️ Accurate Transcription**: Utilizes **AssemblyAI** for high-fidelity speech-to-text conversion with automatic language detection and speaker diarization (speaker separation).
-*   **🧠 AI-Powered Analysis**: Integrates **Groq (Meta Llama 3.3)** to generate structured summaries, detect sentiment (Positive/Negative/Neutral), and auto-tag calls (e.g., "Billing", "Support", "Churn Risk").
-*   **📊 Interactive Dashboard**: A modern, responsive web interface to view call logs, read transcripts, listen to audio, and filter data by sentiment or tags.
-*   **☁️ Google Drive Integration**: Automatically monitors a specified Google Drive folder for new audio files, downloads them, and triggers the analysis pipeline.
-*   **🔔 Email Notifications**: Sends automated email reports with call summaries and sentiment scores immediately after processing.
-*   **💾 Secure Persistence**: Stores all call metadata, transcripts, and analysis results in a **Supabase** database.
-*   **🤖 Vapi Integration**: Ready for integration with Vapi for real-time voice AI assistants.
+-   **Dashboard Overview**: Real-time stats on call volume, sentiment distribution, and category tags.
+-   **Audio Ingestion**:
+    -   **File Upload**: Drag & drop support for multiple audio formats.
+    -   **Google Drive Sync**: Automatically monitors a specific Drive folder for new call recordings.
+    -   **Vapi Integration**: Webhook support for real-time Live Call tracking and analysis from Vapi assistants.
+-   **AI Analysis**:
+    -   **Transcription**: High-accuracy transcription using AssemblyAI.
+    -   **Speaker Diarization**: Detects and separates speakers (Agent vs. Customer).
+    -   **Advanced Insights (Groq/Llama)**:
+        -   Sentiment Analysis (Positive, Neutral, Negative).
+        -   Automatic Tagging (Billing, Support, Churn Risk, etc.).
+        -   Structured Summaries (Overview, Key Points, Caller Intent, Resolution, Action Items).
+-   **Translation**: One-click translation of transcripts and summaries into multiple languages (English, Hindi, Malayalam, Arabic).
+-   **Interactive UI**:
+    -   Search and Filter calls by date, sentiment, or tag.
+    -   Clickable timestamps to jump to specific audio segments.
+    -   Dark Mode support.
 
-## 🛠️ Tech Stack
+## 🛠️ Technology Stack
 
-*   **Backend**: Python, FastAPI, Uvicorn
-*   **Database**: Supabase (PostgreSQL)
-*   **AI Services**: AssemblyAI (Transcription), Groq (LLM Analysis)
-*   **Cloud & Storage**: Google Drive API, Google Cloud Platform
-*   **Frontend**: HTML5, CSS3, JavaScript, Jinja2 Templates
-*   **Utilities**: `python-dotenv`, `smtplib`
+-   **Backend**: Python (FastAPI), AsyncIO
+-   **Frontend**: HTML5, CSS3 (Modern/Glassmorphism), JavaScript (Vanilla)
+-   **Database**: Supabase (PostgreSQL)
+-   **AI Models**:
+    -   LLM: Meta Llama 3 (via Groq)
+    -   Transcription: AssemblyAI
+-   **Voice AI**: Vapi
+-   **Services**: Google Drive API, Gmail SMTP (Notifications)
 
-## 🚀 Setup & Installation
+## 📦 Installation
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/basileldo18/10xDS-Voice-Analytics.git
-cd 10xDS-Voice-Analytics
-```
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/yourusername/voxanalyze.git
+    cd voxanalyze
+    ```
 
-### 2. Create Virtual Environment
-```bash
-# Windows
-python -m venv venv
-.\venv\Scripts\activate
+2.  **Create a virtual environment**:
+    ```bash
+    python -m venv venv
+    # Windows
+    venv\Scripts\activate
+    # Mac/Linux
+    source venv/bin/activate
+    ```
 
-# macOS/Linux
-python3 -m venv venv
-source venv/bin/activate
-```
+3.  **Install dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+4.  **Configuration**:
+    -   Copy `.env.example` to `.env`:
+        ```bash
+        cp .env.example .env
+        ```
+    -   Fill in your API keys (Groq, Supabase, AssemblyAI, Vapi, Google Drive ID).
 
-### 4. Configuration (.env)
-Create a `.env` file in the root directory with the following variables:
+## 🚀 Usage
 
-```ini
-# --- Core ---
-FLASK_SECRET_KEY=your_secure_random_key
+1.  **Run the application**:
+    ```bash
+    python app.py
+    ```
+    The server will start at `http://localhost:8000` (or the port specified).
 
-# --- Database (Supabase) ---
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_supabase_anon_key
+2.  **Access the Dashboard**:
+    Open your browser and navigate to the local URL. Log in (if auth is enabled) and start analyzing calls.
 
-# --- AI Services ---
-ASSEMBLYAI_API_KEY=your_assemblyai_key
-GROQ_API_KEY=your_groq_api_key
+## 🔗 API Endpoints
 
-# --- Google Drive & Gmail ---
-# SMTP for sending emails
-SMTP_EMAIL=your_email@gmail.com
-SMTP_PASSWORD=your_app_specific_password
+-   `GET /api/calls`: Fetch paginated call records.
+-   `GET /api/call-stats`: Get aggregate statistics.
+-   `POST /api/upload`: Upload and process audio files.
+-   `POST /api/translate`: Translate transcript/summary.
+-   `POST /webhook/drive`: Handle Google Drive push notifications.
+-   `POST /api/vapi-call`: Handle Vapi webhooks.
 
-# --- Vapi (Optional) ---
-VAPI_PUBLIC_KEY=your_vapi_public_key
-VAPI_ASSISTANT_ID=your_vapi_assistant_id
-```
+## 📄 License
 
-### 5. Google Drive Setup
-To enable the Google Drive sync feature:
-1.  Obtain `credentials.json` from your Google Cloud Console (OAuth 2.0 Client ID).
-2.  Place `credentials.json` in the root directory.
-3.  On the first run, the application will open a browser window to authenticate. This will generate a `token.json` file automatically.
-4.  **Note**: Update the `FOLDER_ID` variable in `app.py` to match the Google Drive folder you want to monitor.
-
-## 🏃‍♂️ Running the Application
-
-Start the server with hot-reloading enabled:
-
-```bash
-uvicorn app:app --reload
-```
-
-*   **Dashboard**: Open `http://localhost:8000` in your browser.
-*   **Login**: Default authentication is session-based.
-*   **API Docs**: Swagger UI is available at `http://localhost:8000/docs`.
-
-## 📡 API Endpoints Overview
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/` | Main dashboard interface |
-| `GET` | `/api/calls` | Fetch paginated call logs with stats |
-| `POST` | `/api/upload` | Upload an audio file for immediate processing |
-| `PUT` | `/api/calls/{id}/diarization` | Update speaker labels/diarization |
-| `GET` | `/api/settings` | Retrieve user preferences |
-| `POST` | `/api/settings` | Save user preferences |
-
-## 📂 Project Structure
-
-```
-├── app.py                 # Main FastAPI application entry point
-├── fastapi_models.py      # Pydantic data models
-├── requirements.txt       # Python dependencies
-├── templates/             # HTML templates (Jinja2)
-│   ├── index.html         # Dashboard
-│   ├── login.html         # Login page
-│   └── settings.html      # User settings
-├── static/                # Static assets (CSS, JS, Images)
-│   ├── css/               # Stylesheets
-│   └── js/                # Client-side logic
-└── uploads/               # Temporary storage for processed audio
-```
-
-## 🤝 Contributing
-
-1.  Fork the repository.
-2.  Create a feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
+[MIT License](LICENSE)

@@ -6,6 +6,7 @@ import time
 import asyncio
 import threading
 import smtplib
+import uuid  # Added for webhook channel IDs
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional, Dict, Any
@@ -52,6 +53,164 @@ app = FastAPI(title="VoxAnalyze")
 SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "voxanalyze-secret-key-change-in-prod")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
+@app.on_event("startup")
+async def startup_event():
+    # Move all blocking syncs to a background task so server accepts requests IMMEDIATELY
+    global app_loop
+    app_loop = asyncio.get_running_loop()
+    asyncio.create_task(run_startup_tasks())
+
+async def run_startup_tasks():
+    print("[STARTUP] Background tasks starting (DB Sync, Drive Sync, Webhook)...")
+    try:
+        # 1. Sync seen_ids from Database
+        await run_in_threadpool(sync_seen_ids_from_db)
+        
+        # 2. Sync existing Drive files
+        await run_in_threadpool(sync_drive_state)
+
+        # 3. Start Webhook Manager (Auto-Renew)
+        # We start this as a background loop instead of a single call
+        asyncio.create_task(webhook_renewal_loop())
+        print("[STARTUP] Background tasks complete! System ready.")
+    except Exception as e:
+        print(f"[STARTUP] Background task error: {e}")
+
+drive_page_token = None
+app_loop = None
+
+def create_notification_event(step, message, status="active", file_id=None):
+    """Helper to create standard notification payload."""
+    payload = {"step": step, "message": message, "status": status}
+    if file_id: payload["file_id"] = file_id
+    return json.dumps(payload)
+
+async def process_drive_file(file_path, filename, drive_file_id, notification_manager):
+    """
+    Async version of audio processing with notifications for Drive uploads.
+    """
+    try:
+        print(f"[PROCESS] Starting async processing for {filename}")
+        
+        # 1. Start Notification
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("drive_import", f"Importing from Google Drive: {filename}", "active"))
+
+        # 2. Transcription
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("transcribe", "Transcribing audio...", "active"))
+            
+        # Run blocking transcribe in threadpool
+        transcript, duration_seconds, diarization_data, speaker_count, detected_lang = await run_in_threadpool(
+            transcribe_audio, file_path
+        )
+        
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("transcribe", "Transcription complete", "complete"))
+
+        # 3. Analysis
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("analyze", "Analyzing content...", "active"))
+            
+        sentiment, tags, summary, speakers = await run_in_threadpool(
+            analyze_transcript, transcript, diarization_data=diarization_data
+        )
+
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("analyze", "Analysis complete", "complete"))
+
+        # 4. Save Logic (Reused from process_audio_file logic but adapted)
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("save", "Saving results...", "active"))
+
+        # Patch diarization (copied logic)
+        if speakers and diarization_data:
+            sorted_diarization = sorted(diarization_data, key=lambda x: x.get('start', 0))
+            speaker_map = {}
+            speaker_index = 1
+            for segment in sorted_diarization:
+                orig_id = segment.get('speaker', 'Unknown')
+                if orig_id not in speaker_map:
+                    label = f"Speaker {speaker_index}"
+                    name = speakers.get(label, label)
+                    if isinstance(name, str) and ',' in name:
+                        name = name.split(',')[0].strip()
+                    speaker_map[orig_id] = name
+                    speaker_index += 1
+                segment['display_name'] = speaker_map[orig_id]
+            diarization_data = sorted_diarization
+            if len(speaker_map) > 0:
+                speaker_count = len(speaker_map)
+
+        # Generate Audio URL (Drive ID)
+        audio_url = f"https://drive.google.com/uc?export=download&id={drive_file_id}"
+
+        data = {
+            "filename": filename,
+            "transcript": transcript,
+            "sentiment": sentiment,
+            "tags": tags,
+            "summary": summary,
+            "duration": int(duration_seconds),
+            "email_sent": False,
+            "audio_url": audio_url,
+            "diarization_data": diarization_data,
+            "speaker_count": speaker_count
+        }
+        
+        # Save to DB
+        if supabase:
+             # Check existence first
+            exists = await run_in_threadpool(lambda: supabase.table('calls').select("id").eq("filename", filename).execute())
+            if exists.data:
+                print(f"[DB] Skipping save: {filename} already exists.")
+                if notification_manager:
+                    await notification_manager.broadcast(create_notification_event("done", f"File already processed: {filename}", "success"))
+                return
+
+            # Send Email
+            try:
+                email_sent = await run_in_threadpool(send_email_notification, filename, sentiment, tags, summary)
+                data["email_sent"] = email_sent
+            except Exception:
+                pass
+
+            await run_in_threadpool(lambda: supabase.table('calls').insert(data).execute())
+            print(f"[DB] Saved results for {filename}")
+
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("done", "Processing successful!", "success"))
+            
+    except Exception as e:
+        print(f"[PROCESS] Error in async drive processing: {e}")
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("error", f"Error: {str(e)}", "error"))
+    finally:
+        # Cleanup temp file
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except: pass
+
+def sync_drive_state():
+    global drive_page_token
+    try:
+        service = get_drive_service()
+        if service:
+            # 1. Inventory existing files
+            existing = list_files_in_folder(service, FOLDER_ID)
+            for f in existing:
+                seen_ids.add(f['id'])
+            print(f"[STARTUP] Drive Sync Complete. Monitoring {len(seen_ids)} files.")
+            
+            # 2. Initialize Change Tracking Token
+            token_response = service.changes().getStartPageToken().execute()
+            drive_page_token = token_response.get('startPageToken')
+            print(f"[STARTUP] Initialized Change Tracking Token: {drive_page_token}")
+            
+    except Exception as e:
+        print(f"[STARTUP] Drive Sync Error: {e}")
+
 # CORS (Allowed origins - adjust as needed)
 origins = ["*"]
 app.add_middleware(
@@ -71,9 +230,9 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Google Drive Config
-FOLDER_ID = "1tUVWuJhjfsSC1BpfgMScflHefr1_vKYy"
-TOKEN_FILE = 'token.json'
-CREDENTIALS_FILE = 'credentials.json'
+# You can override this by setting GOOGLE_DRIVE_FOLDER_ID in your .env file
+FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "1tUVWuJhjfsSC1BpfgMScflHefr1_vKYy")
+
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 # --- Supabase Setup ---
@@ -246,11 +405,93 @@ VoxAnalyze - AI-Powered Call Analysis Dashboard
         print(f"[EMAIL] Error sending notification: {e}")
         return False
 
+# --- Supabase Storage Helper Functions ---
+
+def upload_audio_to_supabase(file_path, filename):
+    """
+    Upload an audio file to Supabase Storage.
+    
+    Args:
+        file_path: Path to the local audio file
+        filename: Name to use for the file in storage
+    
+    Returns:
+        public_url: Public URL of the uploaded file, or None if failed
+    """
+    if not supabase:
+        print("[SUPABASE STORAGE] Supabase client not available")
+        return None
+    
+    try:
+        bucket_name = "audio-files"
+        
+        # Read file content
+        with open(file_path, 'rb') as f:
+            file_content = f.read()
+        
+        # Upload to Supabase Storage
+        print(f"[SUPABASE STORAGE] Uploading {filename} to bucket '{bucket_name}'...")
+        
+        # Upload file (will overwrite if exists with same name)
+        response = supabase.storage.from_(bucket_name).upload(
+            path=filename,
+            file=file_content,
+            file_options={"content-type": "audio/wav", "upsert": "true"}
+        )
+        
+        # Get public URL
+        public_url = supabase.storage.from_(bucket_name).get_public_url(filename)
+        
+        print(f"[SUPABASE STORAGE] Upload successful! URL: {public_url}")
+        return public_url
+        
+    except Exception as e:
+        print(f"[SUPABASE STORAGE] Upload failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def check_file_exists_in_supabase(filename):
+    """
+    Check if a file already exists in Supabase Storage.
+    
+    Args:
+        filename: Name of the file to check
+    
+    Returns:
+        public_url: Public URL if file exists, None otherwise
+    """
+    if not supabase:
+        return None
+    
+    try:
+        bucket_name = "audio-files"
+        
+        # List files in bucket
+        files = supabase.storage.from_(bucket_name).list()
+        
+        # Check if file exists
+        for file in files:
+            if file['name'] == filename:
+                public_url = supabase.storage.from_(bucket_name).get_public_url(filename)
+                print(f"[SUPABASE STORAGE] File {filename} already exists: {public_url}")
+                return public_url
+        
+        return None
+        
+    except Exception as e:
+        print(f"[SUPABASE STORAGE] Error checking file existence: {e}")
+        return None
+
 # --- Helper Functions ---
 
 def analyze_transcript_with_groq(text):
     if not groq_client: return None
     try:
+        # Debug: Log input
+        print(f"[GROQ] Starting analysis - Transcript length: {len(text)} characters")
+        print(f"[GROQ] Transcript preview (first 200 chars): {text[:200]}...")
+        
         prompt = f"""Analyze the following call transcript and provide a comprehensive, detailed analysis in simple, easy-to-understand words.
 
 1. Sentiment: Classify as exactly one of: "Positive", "Negative", or "Neutral"
@@ -322,15 +563,45 @@ Respond ONLY in this exact JSON format:
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
-            max_tokens=2000
+            max_tokens=2000,
+            response_format={"type": "json_object"}
         )
         result_text = response.choices[0].message.content.strip()
+        
+        # Debug logging
+        print(f"[GROQ] Raw response length: {len(result_text)} characters")
+        print(f"[GROQ] First 500 chars of response: {result_text[:500]}")
+        
         if result_text.startswith("```"):
             result_text = result_text.split("```")[1]
             if result_text.startswith("json"):
                 result_text = result_text[4:]
         
-        result = json.loads(result_text)
+        # Clean up the response text
+        result_text = result_text.strip()
+        
+        # Try to parse the JSON
+        try:
+            result = json.loads(result_text)
+        except json.JSONDecodeError as json_err:
+            print(f"[GROQ] JSON parsing failed: {json_err}")
+            print(f"[GROQ] Attempting to fix malformed JSON...")
+            
+            # Try to extract JSON from the response
+            # Sometimes the LLM adds extra text before/after
+            start_idx = result_text.find("{")
+            end_idx = result_text.rfind("}") + 1
+            
+            if start_idx >= 0 and end_idx > start_idx:
+                result_text = result_text[start_idx:end_idx]
+                try:
+                    result = json.loads(result_text)
+                    print(f"[GROQ] Successfully extracted and parsed JSON")
+                except:
+                    print(f"[GROQ] Could not parse JSON even after extraction")
+                    return None
+            else:
+                return None
         sentiment = result.get("sentiment", "Neutral")
         tags = result.get("tags", [])
         speakers = result.get("speakers", {})
@@ -359,7 +630,9 @@ Respond ONLY in this exact JSON format:
         if sentiment not in ["Positive", "Negative", "Neutral"]:
             sentiment = "Neutral"
         
-        print(f"[GROQ] Analysis complete - Speakers detected: {list(speakers.values())}")
+        print(f"[GROQ] Analysis complete - Sentiment: {sentiment}, Tags: {tags}")
+        print(f"[GROQ] Summary JSON length: {len(summary_json)} characters")
+        print(f"[GROQ] Speakers detected: {list(speakers.values())}")
         return sentiment, tags, summary_json, speakers
     except Exception as e:
         print(f"[GROQ] Error analyzing transcript: {e}")
@@ -574,20 +847,34 @@ def process_audio_file(file_path, original_filename, drive_file_id=None, languag
         }
         
         if supabase:
-            try:
-                # Double check if this file was already processed by another thread/process
-                # (e.g. race between webhook and manual upload)
-                exists = supabase.table('calls').select("id").eq("filename", original_filename).execute()
-                if exists.data:
-                    print(f"[DB] Skipping save: {original_filename} already exists in database.")
-                    return exists.data[0]
+            # Retry logic for DB insert to handle transient socket errors (like WinError 10035)
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # Double check if this file was already processed by another thread/process
+                    # (e.g. race between webhook and manual upload)
+                    if attempt == 0: # Only check existence on first attempt
+                        exists = supabase.table('calls').select("id").eq("filename", original_filename).execute()
+                        if exists.data:
+                            print(f"[DB] Skipping save: {original_filename} already exists in database.")
+                            return exists.data[0]
 
-                email_sent = send_email_notification(original_filename, sentiment, tags, summary)
-                data["email_sent"] = email_sent
-                supabase.table('calls').insert(data).execute()
-                print(f"[DB] Saved results for {original_filename}")
-            except Exception as db_err:
-                print(f"[DB] Error: {db_err}")
+                    if attempt == 0: # Send email only once
+                         try:
+                             email_sent = send_email_notification(original_filename, sentiment, tags, summary)
+                             data["email_sent"] = email_sent
+                         except Exception as email_err:
+                             print(f"[EMAIL] Warning during processing: {email_err}")
+
+                    supabase.table('calls').insert(data).execute()
+                    print(f"[DB] Saved results for {original_filename}")
+                    break # Success!
+                except Exception as db_err:
+                    print(f"[DB] Error (Attempt {attempt+1}/{max_retries}): {db_err}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2) # Wait before retry
+                    else:
+                        print(f"[DB] FAILED to save {original_filename} after {max_retries} attempts.")
                 
         return data
     except Exception as e:
@@ -596,37 +883,97 @@ def process_audio_file(file_path, original_filename, drive_file_id=None, languag
 
 # --- Drive Logic ---
 
-def get_drive_service():
-    creds = None
-    if os.path.exists(TOKEN_FILE):
-        try:
-            creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-            if creds and creds.scopes:
-                if 'https://www.googleapis.com/auth/drive' not in creds.scopes:
-                    os.remove(TOKEN_FILE)
-                    creds = None
-        except Exception:
-            creds = None
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+
+_cached_creds = None
+drive_update_lock = threading.Lock()
+
+def get_drive_service(user_id=None):
+    """Initializes Google Drive service using Service Account credentials from Supabase user_settings."""
+    global _cached_creds
+    SCOPES = ['https://www.googleapis.com/auth/drive']
+    creds = _cached_creds
     
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+    # 1. Try Cached Creds
+    if creds:
+        # print("[DRIVE] Using cached credentials.") # Too verbose
+        pass
+    else:
+        # 2. Try loading from Supabase
+        if supabase:
             try:
-                creds.refresh(GoogleRequest())
-            except Exception:
-                if os.path.exists(TOKEN_FILE): os.remove(TOKEN_FILE)
-                creds = None
-        
+                # If user_id provided, fetch theirs. Otherwise fetch any (assuming single tenant/admin)
+                query = supabase.table('user_settings').select("settings")
+                if user_id:
+                    query = query.eq('user_id', user_id)
+                else:
+                    query = query.limit(1)
+                    
+                response = query.execute()
+                
+                if response.data and len(response.data) > 0:
+                    # Check each found row (if multiple, though limit(1) prevents that usually)
+                    for row in response.data:
+                        settings = row.get('settings', {})
+                        if not settings: continue
+                        
+                        # Look for service account data in various likely keys or the root
+                        candidates = [
+                            settings.get('service_account_json'),
+                            settings.get('service_account'),
+                            settings.get('google_drive'),
+                            settings # The whole object might be the key
+                        ]
+                        
+                        for candidate in candidates:
+                            if isinstance(candidate, dict) and 'private_key' in candidate and 'client_email' in candidate:
+                                print(f"[DRIVE] Found valid service account in Supabase (User: {row.get('user_id', 'Unknown')})")
+                                creds = Credentials.from_service_account_info(candidate, scopes=SCOPES)
+                                break
+                        if creds: break
+                        
+            except Exception as e:
+                print(f"[DRIVE] Supabase Credential Load Warning: {e}")
+
+        # 3. Fallback to Local File
         if not creds:
-            if not os.path.exists(CREDENTIALS_FILE):
-                print(f"Error: {CREDENTIALS_FILE} missing.")
-                return None
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        
-        with open(TOKEN_FILE, 'w') as token:
-            token.write(creds.to_json())
-            
-    return build('drive', 'v3', credentials=creds)
+            SERVICE_ACCOUNT_FILE = 'service-account-key.json' 
+            if os.path.exists(SERVICE_ACCOUNT_FILE):
+                try:
+                    creds = Credentials.from_service_account_file(
+                        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+                    print("[DRIVE] Loaded credentials from local file.")
+                except Exception as e:
+                    print(f"[DRIVE] Local File Validaton Error: {e}")
+            else:
+                # 4. Fallback to Environment Variable Backup
+                backup_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON_BACKUP")
+                if backup_json:
+                    try:
+                        import json
+                        creds_info = json.loads(backup_json)
+                        creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+                        print("[DRIVE] Loaded credentials from GOOGLE_SERVICE_ACCOUNT_JSON_BACKUP environment variable.")
+                    except Exception as e:
+                        print(f"[DRIVE] Backup Environment Variable Validation Error: {e}")
+
+        if creds:
+            _cached_creds = creds
+
+        else:
+             print(f"[DRIVE] No local service account file found ({SERVICE_ACCOUNT_FILE})")
+
+    if not creds:
+        print("[DRIVE] CRITICAL: No valid Service Account credentials found.")
+        return None
+
+    try:
+        return build('drive', 'v3', credentials=creds)
+    except Exception as e:
+        print(f"[DRIVE] Service Build Error: {e}")
+        return None
+
 
 def list_files_in_folder(service, folder_id):
     query = f"'{folder_id}' in parents and mimeType contains 'audio' and trashed = false"
@@ -661,6 +1008,11 @@ def get_drive_file_by_name(service, name, folder_id):
         print(f"[DRIVE] Error checking for file existence: {e}")
         return None
 
+# NOTE: upload_file_to_drive_chunked() has been removed
+# All file uploads now use Supabase Storage via upload_audio_to_supabase()
+# See lines ~290-366 for Supabase Storage implementation
+
+
 def sync_seen_ids_from_db():
     """Fetch already processed Drive IDs from the database to avoid re-processing."""
     global seen_ids
@@ -673,7 +1025,7 @@ def sync_seen_ids_from_db():
         response = supabase.table('calls')\
             .select("audio_url")\
             .order('created_at', desc=True)\
-            .limit(1000)\
+            .limit(100)\
             .execute()
             
         for call in response.data:
@@ -721,12 +1073,52 @@ async def vapi_webhook(request: Request, background_tasks: BackgroundTasks):
         message_type = message.get('type')
         print(f"[VAPI-WEBHOOK] Message Type: {message_type}")
         
+        # Ensure Call Exists in DB (Important for FK constraints)
+        if call_id and supabase:
+            # If we receive ANY event for a call ID, ensure it's tracked as 'in-progress' unless it's an end report
+            # This fixes issues where 'status-update' (started) might be missed or not sent
+            if message_type not in ['end-of-call-report']:
+                # Upsert call to ensure it exists
+                # We use a lightweight upsert to avoid overwriting critical fields if they exist
+                # But we ensure status is 'in-progress' logic if needed
+                
+                # Check if this qualifies as an active call signal
+                is_active_signal = message_type in ['transcript', 'speech-update', 'conversation-update', 'status-update']
+                
+                if is_active_signal:
+                    try:
+                         # Upsert with minimal data to ensure row exists
+                         # We'll set status to 'in-progress' if it's not already ended? 
+                         # Actually simpler: just upsert. If it was 'ended', we might re-open it? 
+                         # No, Vapi call IDs are unique. If we get a transcript, it IS in progress.
+                         
+                        data = {
+                            'call_id': call_id,
+                            'status': 'in-progress',
+                            'updated_at': datetime.now(timezone.utc).isoformat()
+                        }
+                        # If we have customer info, add it (optional refinement)
+                        if call_data.get('customer'):
+                            data['customer_phone'] = call_data.get('customer', {}).get('number')
+                        
+                        # Use upsert with ignoreDuplicates=False (default) to update timestamp
+                        # BUT we should be careful not to overwrite 'ended' if we process messages out of order?
+                        # For now, simplistic approach is best for "Live" visibility.
+                        
+                        supabase.table('vapi_calls').upsert(data).execute()
+                        # print(f"[VAPI-WEBHOOK] Ensured call {call_id} is tracked.")
+                    except Exception as e:
+                        print(f"[VAPI-WEBHOOK] Error tracking active call: {e}")
+
         if message_type == 'transcript':
             await handle_transcript(message, call_data)
         elif message_type == 'end-of-call-report':
             await handle_end_of_call(message, call_data, background_tasks)
         elif message_type == 'status-update':
             await handle_status_update(message, call_data)
+        elif message_type in ['conversation-update', 'speech-update']:
+            # Just tracking presence (handled above)
+            pass
             
         return JSONResponse(status_code=200, content={"success": True})
     except Exception as e:
@@ -776,7 +1168,6 @@ async def handle_transcript(message: dict, call_data: dict):
                 'call_id': call_data.get('id'),
                 'role': role,
                 'transcript': transcript,
-                'transcript_type': transcript_type,
                 'timestamp': ist_time.isoformat()
             }
             
@@ -897,30 +1288,101 @@ async def get_transcripts(call_id: str):
 seen_ids = set()
 
 def check_for_updates():
-    print("[CHECKING] Drive for new files...")
+    global drive_page_token
     
-    # Sync from DB on first run or if empty
-    if not seen_ids:
-        sync_seen_ids_from_db()
-        
-    service = get_drive_service()
-    if not service: return
+    # Non-blocking lock to prevent multiple concurrent checks
+    if not drive_update_lock.acquire(blocking=False):
+        # Silently skip if already running to prevent log spam
+        return
 
     try:
-        current_files = list_files_in_folder(service, FOLDER_ID)
-        for file_meta in current_files:
-            f_id = file_meta['id']
-            f_name = file_meta['name']
+        print(f"[CHANGES] check_for_updates called. Current Token: {str(drive_page_token)[:30]}...")
+        
+        service = get_drive_service()
+        if not service: 
+            print("[CHANGES] No Service Available")
+            return
+
+        # Safety: If token lost/not set, re-init
+        if not drive_page_token:
+            print("[CHANGES] Token missing, fetching new start token.")
+            try:
+                response = service.changes().getStartPageToken().execute()
+                drive_page_token = response.get('startPageToken')
+                print(f"[CHANGES] Fetched new token: {drive_page_token}")
+            except Exception as e:
+                print(f"Error getting token: {e}")
+                return
+        while drive_page_token:
+            print(f"[CHANGES] Requesting changes from Google (Token: ...{str(drive_page_token)[-10:]})")
+            response = service.changes().list(
+                pageToken=drive_page_token,
+                spaces='drive',
+                includeCorpusRemovals=True,
+                fields='nextPageToken, newStartPageToken, changes(fileId, removed, file(id, name, mimeType, parents))'
+            ).execute()
             
-            if f_id not in seen_ids:
-                print(f"*** NEW FILE DETECTED: {f_name} ***")
+            changes = response.get('changes', [])
+            print(f"[CHANGES] Google returned {len(changes)} item(s).")
+            
+            for change in changes:
+                f_id = change.get('fileId')
+                if change.get('removed'): 
+                    print(f"[CHANGES] Item {f_id} was removed. Skipping.")
+                    continue
+                
+                f = change.get('file')
+                if not f: 
+                    print(f"[CHANGES] Item {f_id} has no file dict. Skipping.")
+                    continue
+                
+                f_name = f.get('name', 'Unknown')
+                print(f"[CHANGES] Analyzing file: {f_name} ({f_id})")
+
+                # 1. Filter by Parent Folder
+                parents = f.get('parents', [])
+                if FOLDER_ID not in parents: 
+                    print(f"[CHANGES] Skip {f_name}: Parent {parents} != {FOLDER_ID}")
+                    continue
+                
+                # 2. Filter by Type (Audio)
+                mime = f.get('mimeType', '')
+                if 'audio' not in mime:
+                    print(f"[CHANGES] Skip {f_name}: Mime {mime} not audio.")
+                    continue
+
+                if f_id in seen_ids: 
+                    print(f"[CHANGES] Skip {f_name}: Already processed.")
+                    continue
+                
+                print(f"*** NEW CHANGE DETECTED: {f_name} ***")
                 seen_ids.add(f_id)
+                
+                # Process - Schedule on main loop
                 safe_name = secure_filename(f_name)
                 file_path = download_file_from_drive(service, f_id, safe_name)
-                if file_path:
-                    process_audio_file(file_path, f_name)
+                
+                if file_path and app_loop:
+                    print(f"[CHANGES] Scheduling async processing for {f_name}")
+                    asyncio.run_coroutine_threadsafe(
+                        process_drive_file(file_path, f_name, f_id, notification_manager), 
+                        app_loop
+                    )
+                elif file_path:
+                     # Fallback if no loop (shouldn't happen)
+                     process_audio_file(file_path, f_name, drive_file_id=f_id)
+
+            if 'newStartPageToken' in response:
+                drive_page_token = response.get('newStartPageToken')
+                print(f"[CHANGES] Sync complete. Token Updated.")
+                break 
+            
+            drive_page_token = response.get('nextPageToken')
+
     except Exception as e:
-        print(f"Error Checking Updates: {e}")
+        print(f"[CHANGES] Major Error in processing loop: {e}")
+    finally:
+        drive_update_lock.release()
 
 # --- Dependencies ---
 
@@ -945,7 +1407,9 @@ async def index(request: Request, user_id: str = Depends(login_required)):
     return templates.TemplateResponse("index.html", {
         "request": request,
         "vapi_public_key": os.environ.get("VAPI_PUBLIC_KEY", ""),
-        "vapi_assistant_id": os.environ.get("VAPI_ASSISTANT_ID", "")
+        "vapi_assistant_id": os.environ.get("VAPI_ASSISTANT_ID", ""),
+        "supabase_url": os.environ.get("SUPABASE_URL", ""),
+        "supabase_key": os.environ.get("SUPABASE_KEY", "")
     })
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -1026,39 +1490,43 @@ async def save_settings(settings: UserSettings, user_id: str = Depends(login_req
 def run_query(query_builder):
     return query_builder.execute()
 
-@app.get("/api/calls")
-async def get_calls(user_id: str = Depends(get_current_user), offset: int = 0, limit: int = 20):
-    if not supabase: return {"calls": [], "total": 0, "stats": {}}
+
+@app.get("/api/calls/{call_id}")
+async def get_call_details(call_id: int, user_id: str = Depends(login_required)):
+    if not supabase: return JSONResponse(status_code=500, content={"error": "Database not available"})
+    
+    try:
+        response = supabase.table('calls').select("*").eq('id', call_id).execute()
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        else:
+            raise HTTPException(status_code=404, detail="Call not found")
+    except Exception as e:
+        print(f"[API] Error fetching call details: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/api/call-stats")
+async def get_call_stats_endpoint(user_id: str = Depends(get_current_user)):
+    if not supabase: return {"stats": {}}
     
     try:
         t_start = time.time()
-        print(f"[API CHECK] Starting Optimized Parallel Queries...")
-
-        # Main query (this is fast - 2ms)
-        main_query = supabase.table('calls')\
-            .select("id, filename, sentiment, tags, summary, duration, created_at, speaker_count, email_sent, transcript, audio_url, diarization_data", count="estimated")\
-            .order('created_at', desc=True)\
-            .range(offset, offset + limit - 1)
+        print("[API STATS] Fetching statistics...")
 
         # CRITICAL FIX: Always try database function first
         use_db_function = False
         stats_data = {}
         
         try:
-            print("[API CHECK] Trying database function...")
             stats_result = await asyncio.to_thread(
                 lambda: supabase.rpc('get_call_stats').execute()
             )
             if stats_result.data:
                 stats_data = stats_result.data
                 use_db_function = True
-                print("[API CHECK] Using database function for stats!")
         except Exception as e:
-            print(f"[API CHECK] Database function failed: {e}, using fallback")
+            print(f"[API STATS] Database function failed: {e}, using fallback")
             use_db_function = False
-
-        # Execute main query
-        response = await asyncio.to_thread(run_query, main_query)
 
         if use_db_function:
             # Stats already computed by database
@@ -1068,7 +1536,7 @@ async def get_calls(user_id: str = Depends(get_current_user), offset: int = 0, l
                     "negative": stats_data.get('negative', 0),
                     "neutral": stats_data.get('neutral', 0)
                 },
-                "avg_duration": round(stats_data.get('avg_duration', 0), 2),
+                "avg_duration": round(stats_data.get('avg_duration') or 0, 2),
                 "tag_counts": {
                     "Support": stats_data.get('support', 0),
                     "Billing": stats_data.get('billing', 0),
@@ -1079,7 +1547,7 @@ async def get_calls(user_id: str = Depends(get_current_user), offset: int = 0, l
             # Fallback: Drastically reduce the limit
             stats_query = supabase.table('calls')\
                 .select("sentiment, duration, tags")\
-                .order('created_at', desc=True)\
+                .order('id', desc=True)\
                 .limit(50)  # Reduced to 50 rows only
             
             stats_response = await asyncio.to_thread(run_query, stats_query)
@@ -1122,15 +1590,48 @@ async def get_calls(user_id: str = Depends(get_current_user), offset: int = 0, l
             stats["avg_duration"] = round(total_duration / valid_duration_count, 2) if valid_duration_count > 0 else 0
 
         t_end = time.time()
-        print(f"[API CHECK] Optimized Query Completed in {t_end - t_start:.4f}s")
+        print(f"[API STATS] Completed in {t_end - t_start:.4f}s")
+        return {"stats": stats}
+
+    except Exception as e:
+        print(f"[API STATS] Error: {e}")
+        # Return empty stats on error rather than 500 to prevent UI crash
+        return {"stats": {
+            "sentiment": {"positive": 0, "negative": 0, "neutral": 0},
+            "avg_duration": 0,
+            "tag_counts": {"Support": 0, "Billing": 0, "Technical": 0}
+        }}
+
+@app.get("/api/calls")
+async def get_calls(user_id: str = Depends(get_current_user), offset: int = 0, limit: int = 20):
+    if not supabase: return {"calls": [], "total": 0, "stats": {}}
+    
+    try:
+        t_start = time.time()
+        # Main query (Optimized: Exclude heavy transcript/diarization fields)
+        # Use ID for sorting as it's an indexed primary key (faster than created_at)
+        main_query = supabase.table('calls')\
+            .select("id, filename, sentiment, tags, summary, duration, created_at, speaker_count, email_sent", count="exact")\
+            .order('id', desc=True)\
+            .range(offset, offset + limit - 1)
+
+        # Execute main query
+        response = await asyncio.to_thread(run_query, main_query)
+        
+        print(f"[API] get_calls count: {response.count} (type: {type(response.count)})")
+        data_len = len(response.data) if response.data else 0
+        print(f"[API] get_calls returned {data_len} rows.")
+
+        total_count = response.count if isinstance(response.count, int) else 0
+
+        t_end = time.time()
         
         return {
             "calls": response.data,
-            "total": response.count,
-            "stats": stats,
+            "total": total_count,
+            "stats": {}, # Stats are now fetched via /api/call-stats
             "debug_timing": {
-                "total_sec": round(t_end - t_start, 4),
-                "using_db_function": use_db_function
+                "total_sec": round(t_end - t_start, 4)
             }
         }
 
@@ -1174,36 +1675,30 @@ async def upload_audio(
 
     async def generate_progress():
         try:
-            # Upload to Drive
-            yield f"data: {json.dumps({'step': 'upload', 'status': 'active', 'message': 'Uploading to Google Drive...'})}\n\n"
+            # Upload to Supabase Storage
+            yield f"data: {json.dumps({'step': 'upload', 'status': 'active', 'message': 'Uploading to Supabase Storage...'})}\n\n"
             
-            if os.path.exists(TOKEN_FILE):
-                service = get_drive_service()
+            # Check if file already exists in Supabase Storage
+            existing_url = await run_in_threadpool(check_file_exists_in_supabase, safe_name)
+            
+            audio_url = None
+            if existing_url:
+                print(f"[UPLOAD] File {safe_name} already exists in Supabase Storage. Stopping processing.")
+                yield f"data: {json.dumps({'step': 'upload', 'status': 'error', 'message': 'File already exists in Supabase Storage. Manual upload cancelled.'})}\n\n"
+                return # Stop further processing
             else:
-                 # Skip drive upload if no token (dev mode without drive)
-                 service = None
-
-            drive_file_id = None
-            if service:
-                # Check if file already exists in Drive
-                existing_id = get_drive_file_by_name(service, safe_name, FOLDER_ID)
+                # Upload to Supabase Storage
+                print(f"[UPLOAD] Uploading {safe_name} to Supabase Storage")
+                audio_url = await run_in_threadpool(upload_audio_to_supabase, temp_path, safe_name)
                 
-                if existing_id:
-                    print(f"[UPLOAD] File {safe_name} already exists in Drive (ID: {existing_id}). Stopping processing.")
-                    yield f"data: {json.dumps({'step': 'upload', 'status': 'error', 'message': 'File already exists in Google Drive. Manual upload cancelled.'})}\n\n"
-                    return # Stop further processing
+                if audio_url:
+                    print(f"[UPLOAD] Upload successful. URL: {audio_url}")
+                    yield f"data: {json.dumps({'step': 'upload', 'status': 'complete', 'message': 'Uploaded to Supabase Storage!'})}\n\n"
                 else:
-                    file_metadata = {'name': safe_name, 'parents': [FOLDER_ID]}
-                    mime_type = file.content_type or 'audio/mpeg'
-                    media = MediaFileUpload(temp_path, mimetype=mime_type, resumable=True)
-                    uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-                    drive_file_id = uploaded_file.get('id')
-                    yield f"data: {json.dumps({'step': 'upload', 'status': 'complete', 'message': 'Uploaded to Drive!'})}\n\n"
-                
-                if drive_file_id:
-                    seen_ids.add(drive_file_id)
-            else:
-                 yield f"data: {json.dumps({'step': 'upload', 'status': 'complete', 'message': 'Skipped Drive Upload (No Auth)'})}\n\n"
+                    error_msg = f"Supabase Storage upload failed for {safe_name}. Check server logs for details."
+                    print(f"[UPLOAD] {error_msg}")
+                    yield f"data: {json.dumps({'step': 'upload', 'status': 'error', 'message': error_msg})}\n\n"
+                    return
 
             # Transcribe
             yield f"data: {json.dumps({'step': 'transcribe', 'status': 'active', 'message': 'Transcribing audio...'})}\n\n"
@@ -1212,14 +1707,12 @@ async def upload_audio(
             
             # Analyze
             yield f"data: {json.dumps({'step': 'analyze', 'status': 'active', 'message': 'Analyzing sentiment...'})}\n\n"
-            sentiment, tags, summary = await run_in_threadpool(analyze_transcript, transcript)
+            sentiment, tags, summary, detected_speakers = await run_in_threadpool(analyze_transcript, transcript)
             yield f"data: {json.dumps({'step': 'analyze', 'status': 'complete', 'message': 'Analysis complete!'})}\n\n"
             
             # Save
             yield f"data: {json.dumps({'step': 'save', 'status': 'active', 'message': 'Saving to database...'})}\n\n"
-            audio_url = encode_audio_to_base64(temp_path)
-            if not audio_url and drive_file_id:
-                audio_url = f"https://drive.google.com/uc?export=download&id={drive_file_id}"
+            # audio_url is already set from Supabase Storage upload
             
             email_sent = send_email_notification(safe_name, sentiment, tags, summary)
             
@@ -1240,7 +1733,7 @@ async def upload_audio(
                 supabase.table('calls').insert(data).execute()
             
             yield f"data: {json.dumps({'step': 'save', 'status': 'complete', 'message': 'Saved to database!'})}\n\n"
-            yield f"data: {json.dumps({'step': 'done', 'status': 'success', 'message': 'File processed successfully!', 'file_id': drive_file_id})}\n\n"
+            yield f"data: {json.dumps({'step': 'done', 'status': 'success', 'message': 'File processed successfully!'})}\n\n"
 
         except Exception as e:
             yield f"data: {json.dumps({'step': 'error', 'status': 'error', 'message': str(e)})}\n\n"
@@ -1292,27 +1785,90 @@ Segments:
                 "has_diarization": True
             }
         else:
-            prompt = f"Translate to {language_name}:\n{req.transcript[:6000]}"
-            resp = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": f"Translate to {language_name}. Respond ONLY with valid JSON, no prefix/suffix text."}, {"role": "user", "content": prompt}],
-                temperature=0.3, max_tokens=4000
-            )
+            # Check if transcript is a structured summary (JSON)
+            summary_data = None
+            try:
+                summary_data = json.loads(req.transcript)
+            except:
+                pass
             
-            # Clean response - extract JSON
-            translated_response = resp.choices[0].message.content.strip()
-            if not translated_response.startswith("{"):
-                json_start = translated_response.find("{")
-                if json_start != -1:
-                    translated_response = translated_response[json_start:]
-            
-            return {
-                "success": True,
-                "translated_text": translated_response,
-                "language": language_name,
-                "has_diarization": False
-            }
+            if summary_data and isinstance(summary_data, dict):
+                # This is a structured summary - translate field by field
+                print(f"[TRANSLATE] Translating structured summary to {language_name}")
+                
+                # Build a simplified prompt for translation
+                prompt = f"""Translate this call summary to {language_name}. Keep all field names in English, translate only the values.
+
+JSON to translate:
+{json.dumps(summary_data, indent=2)[:2500]}
+
+Return the translated JSON (keep field names like 'overview', 'key_points' in English):"""
+                
+                resp = groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": f"Translate to {language_name}. Return JSON only."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.2,
+                    max_tokens=12000
+                )
+                
+                translated_response = resp.choices[0].message.content.strip()
+                
+                # Clean up any markdown artifacts
+                if "```" in translated_response:
+                    translated_response = translated_response.replace("```json", "").replace("```", "").strip()
+                
+                # Extract JSON if there's extra text
+                if not translated_response.startswith("{"):
+                    json_start = translated_response.find("{")
+                    if json_start != -1:
+                        json_end = translated_response.rfind("}") + 1
+                        if json_end > json_start:
+                            translated_response = translated_response[json_start:json_end]
+                
+                # Verify it's valid JSON before returning
+                try:
+                    json.loads(translated_response)
+                    print(f"[TRANSLATE] Successfully translated structured summary")
+                except json.JSONDecodeError as e:
+                    print(f"[TRANSLATE] JSON validation failed: {e}")
+                    print(f"[TRANSLATE] Response preview: {translated_response[:200]}")
+                    # Return original if translation parsing fails
+                    translated_response = req.transcript
+                
+                return {
+                    "success": True,
+                    "translated_text": translated_response,
+                    "language": language_name,
+                    "has_diarization": False
+                }
+            else:
+                # Plain text translation
+                prompt = f"Translate the following text to {language_name}:\n\n{req.transcript[:6000]}"
+                resp = groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": f"You are a professional translator. Translate accurately to {language_name}."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3, 
+                    max_tokens=4000
+                )
+                
+                translated_response = resp.choices[0].message.content.strip()
+                
+                return {
+                    "success": True,
+                    "translated_text": translated_response,
+                    "language": language_name,
+                    "has_diarization": False
+                }
     except Exception as e:
+        print(f"[TRANSLATE] Error: {e}")
+        import traceback
+        traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/api/admin/delete-call")
@@ -1404,6 +1960,123 @@ async def reanalyze_call(req: Dict[str, Any]):
 
 
 
+import uuid
+
+# Track current webhook channel to manage renewals
+current_webhook_channel_id = None
+current_webhook_resource_id = None
+
+def register_drive_webhook():
+    """Register the Drive webhook on startup and handle renewal."""
+    global current_webhook_channel_id, current_webhook_resource_id
+    
+    webhook_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not webhook_url:
+        print("[WEBHOOK] Warning: RENDER_EXTERNAL_URL not set. Skipping webhook registration.")
+        return
+
+    # Ensure URL is clean and points to the correct endpoint
+    webhook_url = webhook_url.strip().rstrip('/')
+    
+    # Check if the URL already includes the endpoint path to avoid double-appending
+    if not webhook_url.endswith("/webhook/drive"):
+         webhook_url = f"{webhook_url}/webhook/drive"
+         
+    service = get_drive_service()
+    if not service:
+        print("[WEBHOOK] Drive service not available for registration.")
+        return
+        
+    try:
+        # 1. STOP old channel if it exists (Cleanup)
+        if current_webhook_channel_id and current_webhook_resource_id:
+            try:
+                print(f"[WEBHOOK] Stopping old channel: {current_webhook_channel_id}...")
+                service.channels().stop(body={
+                    "id": current_webhook_channel_id,
+                    "resourceId": current_webhook_resource_id
+                }).execute()
+                print("[WEBHOOK] Old channel stopped successfully.")
+            except Exception as stop_err:
+                print(f"[WEBHOOK] Warning: Could not stop old channel: {stop_err}")
+
+        # 2. Register NEW channel
+        # Create a unique channel ID for this session/deployment
+        channel_id = str(uuid.uuid4())
+        
+        # Expiration: Default is usually 7 days (604800 seconds).
+        # We set it slightly less or let default apply, but we will renew before it happens.
+        body = {
+            "id": channel_id,
+            "type": "web_hook",
+            "address": webhook_url,
+            # "expiration": ... (optional, let's use default/max)
+        }
+        
+        print(f"[WEBHOOK] Registering webhook at: {webhook_url}")
+        response = service.files().watch(fileId=FOLDER_ID, body=body).execute()
+        
+        # 3. Update Global State
+        current_webhook_channel_id = response.get('id')
+        current_webhook_resource_id = response.get('resourceId')
+        expiration = response.get('expiration', 'Unknown')
+        
+        print(f"[WEBHOOK] SUCCESS: Channel Registered.")
+        print(f"   - Channel ID: {current_webhook_channel_id}")
+        print(f"   - Resource ID: {current_webhook_resource_id}")
+        print(f"   - Expiration: {expiration}")
+        
+    except Exception as e:
+        print(f"[WEBHOOK] Registration Error: {e}")
+
+async def webhook_renewal_loop():
+    """Background task to renew the webhook every 6 days (before 7-day expiry)."""
+    print("[WEBHOOK LOOP] Starting auto-renewal service...")
+    while True:
+        try:
+            print("[WEBHOOK LOOP] Performing registration/renewal...")
+            await run_in_threadpool(register_drive_webhook)
+        except Exception as e:
+            print(f"[WEBHOOK LOOP] Error during renewal: {e}")
+        
+        # Wait for 6 days (in seconds)
+        # 6 days * 24 hours * 60 mins * 60 secs = 518400 seconds
+        renewal_interval = 6 * 24 * 60 * 60 
+        print(f"[WEBHOOK LOOP] Sleeping for {renewal_interval} seconds (6 days)...")
+        await asyncio.sleep(renewal_interval)
+
+# --- Google Drive Webhook ---
+
+@app.post("/webhook/drive")
+async def drive_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Handle Google Drive Push Notifications.
+    """
+    try:
+        # Log headers for debugging
+        print("\n[DRIVE-WEBHOOK] Received Notification")
+        headers = request.headers
+        channel_id = headers.get('x-goog-channel-id')
+        resource_state = headers.get('x-goog-resource-state')
+        resource_id = headers.get('x-goog-resource-id')
+        
+        print(f"Channel ID: {channel_id}")
+        print(f"Resource State: {resource_state}")
+        print(f"Resource ID: {resource_id}")
+        
+        # 'sync' is sent when the webhook is first registered to confirm connectivity
+        # 'add' or 'update' means files changed
+        if resource_state in ['sync', 'add', 'update', 'change']:
+            print("[DRIVE-WEBHOOK] Triggering file scan...")
+            # Reuse the existing check logic, running in background
+            background_tasks.add_task(run_in_threadpool, check_for_updates)
+            
+        print(f"[DRIVE-WEBHOOK] Responding 200 OK to Channel {channel_id}")
+        return Response(status_code=200)
+    except Exception as e:
+        print(f"[DRIVE-WEBHOOK] Error: {e}")
+        return Response(status_code=500)
+
 
 # --- Notification System (Global SSE) ---
 
@@ -1471,61 +2144,57 @@ async def process_vapi_call_background(url: str, temp_path: str, filename: str, 
         print(f"[VAPI] Download complete: {temp_path}")
         await notification_manager.broadcast(create_event("download", "Download complete", "complete"))
         
-        # Upload to Drive
-        drive_file_id = None
-        service = get_drive_service()
+        # Upload to Supabase Storage
+        audio_url = None
+        await notification_manager.broadcast(create_event("upload", "Uploading to Supabase Storage...", "active"))
         
-        if service:
-            print("[VAPI] Drive service obtained successfully.")
-            await notification_manager.broadcast(create_event("upload", "Uploading to Google Drive..."))
-            
-            # Check for existing logic wrapped in threadpool
-            def check_and_upload():
-                try:
-                    existing_id = get_drive_file_by_name(service, filename, FOLDER_ID)
-                    if existing_id:
-                        print(f"\n{'='*50}\n[VAPI DEBUG] FILE EXISTS IN DRIVE\nID: {existing_id}\n{'='*50}\n")
-                        return existing_id, False # ID, is_new
-                    else:
-                        print(f"\n{'='*50}\n[VAPI DEBUG] STARTING DRIVE UPLOAD\nFilename: {filename}\n{'='*50}\n")
-                        file_metadata = {'name': filename, 'parents': [FOLDER_ID]}
-                        media = MediaFileUpload(temp_path, mimetype='audio/wav', resumable=True)
-                        uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-                        new_id = uploaded_file.get('id')
-                        print(f"\n{'='*50}\n[VAPI DEBUG] UPLOAD SUCCESSFUL\nNew File ID: {new_id}\n{'='*50}\n")
-                        return new_id, True
-                except Exception as drive_err:
-                    print(f"\n{'='*50}\n[VAPI DEBUG] DRIVE UPLOAD ERROR\n{drive_err}\n{'='*50}\n")
-                    return None, False
-            
-            drive_file_id, is_new = await run_in_threadpool(check_and_upload)
-            
-            if drive_file_id:
-                seen_ids.add(drive_file_id)
-                if is_new:
-                    await notification_manager.broadcast(create_event("upload", "Saved to Google Drive!", "complete", drive_file_id))
+        # Check for existing file in Supabase Storage
+        def check_and_upload_supabase():
+            try:
+                existing_url = check_file_exists_in_supabase(filename)
+                if existing_url:
+                    print(f"\n{'='*50}\n[VAPI DEBUG] FILE EXISTS IN SUPABASE\nURL: {existing_url}\n{'='*50}\n")
+                    return existing_url, False, None  # URL, is_new, error
                 else:
-                    await notification_manager.broadcast(create_event("upload", "File already in Google Drive", "complete", drive_file_id))
-            else:
-                 await notification_manager.broadcast(create_event("upload", "Google Drive Upload Failed", "error"))
+                    print(f"\n{'='*50}\n[VAPI DEBUG] STARTING SUPABASE UPLOAD\nFilename: {filename}\n{'='*50}\n")
+                    new_url = upload_audio_to_supabase(temp_path, filename)
+                    if new_url:
+                        print(f"\n{'='*50}\n[VAPI DEBUG] UPLOAD SUCCESSFUL\nURL: {new_url}\n{'='*50}\n")
+                        return new_url, True, None
+                    else:
+                        return None, False, "Upload function returned None"
+            except Exception as upload_err:
+                print(f"\n{'='*50}\n[VAPI DEBUG] SUPABASE UPLOAD ERROR\n{upload_err}\n{'='*50}\n")
+                import traceback
+                traceback.print_exc()
+                return None, False, str(upload_err)
+        
+        audio_url, is_new, upload_error = await run_in_threadpool(check_and_upload_supabase)
+        
+        # STRICT CHECK: Abort if upload failed
+        if not audio_url:
+            error_msg = f"[VAPI] CRITICAL: Supabase Storage upload FAILED. Error: {upload_error}"
+            print(error_msg)
+            await notification_manager.broadcast(create_event("upload", f"Supabase Upload Failed - Processing Aborted", "error"))
+            print("[VAPI] ABORTING: File was NOT uploaded to Supabase. Processing cancelled.")
+            print(f"[VAPI] Error details: {upload_error}")
+            return
+        
+        # Upload successful - proceed with processing
+        if is_new:
+            await notification_manager.broadcast(create_event("upload", "Saved to Supabase Storage! Starting analysis...", "complete"))
         else:
-            print("[VAPI] Drive service not available (get_drive_service returned None). Checking credentials...")
-            if not os.path.exists('token.json'):
-                print("[VAPI] token.json missing.")
-            else:
-                print("[VAPI] token.json exists but service creation failed.")
-                
-            await notification_manager.broadcast(create_event("upload", "Drive Auth Failed - Check Server Logs", "error"))
+            await notification_manager.broadcast(create_event("upload", "File already in Supabase Storage. Proceeding...", "complete"))
             
-        # Run Analysis Pipeline
-        print("[VAPI] Starting Analysis Pipeline...")
+        # Run Analysis Pipeline (only if Supabase upload succeeded)
+        print("[VAPI] Supabase upload confirmed. Starting Analysis Pipeline...")
         await notification_manager.broadcast(create_event("analyze", "Analyzing call sentiment..."))
         
-        # process_audio_file is synchronous
-        await run_in_threadpool(process_audio_file, temp_path, filename, drive_file_id)
+        # process_audio_file is synchronous - pass None for drive_file_id since we're using Supabase
+        await run_in_threadpool(process_audio_file, temp_path, filename, drive_file_id=None)
         
         print("[VAPI] Processing Complete!")
-        await notification_manager.broadcast(create_event("done", "Analysis complete!", "success", drive_file_id))
+        await notification_manager.broadcast(create_event("done", "Analysis complete!", "success"))
         
     except Exception as e:
         print(f"[VAPI] Error processing Vapi call: {e}")
@@ -1554,9 +2223,61 @@ async def handle_vapi_call(request: Request, background_tasks: BackgroundTasks):
         
         # Check common paths where Vapi might put the recording URL
         if isinstance(payload, dict):
-            # Check if there's a 'message' wrapper (Vapi's actual structure)
             check_obj = payload.get('message', payload)
+            message_type = check_obj.get('type')
+            call_id = check_obj.get('call', {}).get('id') or payload.get('call', {}).get('id')
+        
+        # --- 1. Handle Status Updates (Live Call Tracking) ---
+        if message_type == 'status-update' or message_type == 'call-status-update':
+            status = check_obj.get('status')
+            if call_id and status and supabase:
+                print(f"[VAPI LIVE] Status Update: {call_id} -> {status}")
+                data = {
+                    "call_id": call_id,
+                    "status": status,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+                # Additional fields on start
+                if status == 'started':
+                    data['started_at'] = datetime.now(timezone.utc).isoformat()
+                elif status == 'ended':
+                    data['ended_at'] = datetime.now(timezone.utc).isoformat()
+                    # Try to get cost/summary if available
+                    if 'cost' in check_obj: data['cost'] = check_obj['cost']
+                    if 'summary' in check_obj: data['summary'] = check_obj['summary']
+
+                try:
+                    await asyncio.to_thread(lambda: supabase.table('vapi_calls').upsert(data).execute())
+                except Exception as e:
+                    print(f"[VAPI LIVE] Error updating call status: {e}")
+
+        # --- 2. Handle Live Transcripts ---
+        elif message_type == 'transcript' and check_obj.get('transcriptType') == 'final':
+            transcript_text = check_obj.get('transcript')
+            role = check_obj.get('role', 'user') # 'user' or 'assistant'
             
+            if call_id and transcript_text and supabase:
+                print(f"[VAPI LIVE] Transcript: {role}: {transcript_text[:30]}...")
+                t_data = {
+                    "call_id": call_id,
+                    "role": role,
+                    "transcript": transcript_text,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                try:
+                    await asyncio.to_thread(lambda: supabase.table('transcripts').insert(t_data).execute())
+                except Exception as e:
+                    print(f"[VAPI LIVE] Error saving transcript: {e}")
+
+        # --- 3. PROCEED TO ORIGINAL RECORDING URL CHECK ---
+        # Get raw JSON payload
+        # (check_obj is already set above)
+            
+        # Extract recording URL from different possible locations in Vapi's payload
+        recording_url = None
+        
+        # Check common paths where Vapi might put the recording URL
+        if isinstance(payload, dict):
             # Direct recording_url field
             recording_url = check_obj.get('recording_url') or check_obj.get('recordingUrl')
             
@@ -1582,8 +2303,11 @@ async def handle_vapi_call(request: Request, background_tasks: BackgroundTasks):
                     recording_url = check_obj['artifact'].get('stereoRecordingUrl')
         
         if not recording_url:
-            print("[VAPI WEBHOOK] No recording URL found in payload")
-            return {"status": "received", "message": "Event logged but no recording URL found"}
+            # Silence logs for normal status updates to avoid clutter
+            if message_type not in ['status-update', 'transcript', 'call-status-update']:
+                print(f"[VAPI WEBHOOK] No recording URL found in payload (Type: {message_type})")
+            return {"status": "received", "message": "Event processed"}
+        
         
         print(f"[VAPI WEBHOOK] Extracted recording URL: {recording_url}")
         
@@ -1605,32 +2329,30 @@ async def handle_vapi_call(request: Request, background_tasks: BackgroundTasks):
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-@app.post("/webhook/drive")
-async def drive_webhook(request: Request, background_tasks: BackgroundTasks):
-    state = request.headers.get('X-Goog-Resource-State')
-    if state == 'sync': return Response(content="Sync OK")
-    
-    background_tasks.add_task(check_for_updates)
-    return Response(content="OK")
+
 
 import aiofiles
 
+@app.get("/api/debug/live-calls")
+async def debug_live_calls():
+    """Debug endpoint to check vapi_calls table content directly from backend."""
+    if not supabase: return {"error": "Supabase not connected"}
+    try:
+        # Fetch all recent calls without filters
+        response = supabase.table('vapi_calls').select('*').order('created_at', desc=True).limit(20).execute()
+        return {
+            "count": len(response.data),
+            "data": response.data,
+            "server_time": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
-    # Initialize seen_ids from both DB and Drive
-    # 1. Start with what's in the DB
-    sync_seen_ids_from_db()
-    
-    # 2. Add current files in Drive to avoid processing old ones
-    srv = get_drive_service()
-    if srv:
-        try:
-            existing = list_files_in_folder(srv, FOLDER_ID)
-            for f in existing:
-                seen_ids.add(f['id'])
-            print(f"Initialization complete. Monitoring {len(seen_ids)} IDs. Ready for Webhooks!")
-        except Exception as e:
-            print(f"Startup Drive Sync Error: {e}")
+    # ... rest of main ...
+    # Removed blocking syncs from here. They are now handled in startup_event background task.
+    # sync_seen_ids_from_db()
     
     print("[SERVER] Starting FastAPI Server with Uvicorn...")
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8080, reload=True)

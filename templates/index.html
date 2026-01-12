@@ -20,10 +20,24 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="/static/css/style.css?v=4.3">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.3">
+    <link rel="stylesheet" href="/static/css/live-chat.css?v=1.0">
+    <link rel="stylesheet" href="/static/css/minutes-translate.css?v=1.4">
+    <link rel="stylesheet" href="/static/css/minutes-fullwidth.css?v=1.0">
+    <link rel="stylesheet" href="/static/css/summary-translate-btn.css?v=1.0">
 </head>
 
 <body>
+    <!-- Hidden inputs to prevent browser autofill -->
+    <div style="opacity: 0; position: absolute; height: 0; width: 0; z-index: -1; overflow: hidden;">
+        <input type="text" name="fake_username_prevention" autocomplete="username" tabindex="-1" aria-hidden="true">
+        <input type="password" name="fake_password_prevention" autocomplete="current-password" tabindex="-1"
+            aria-hidden="true">
+    </div>
+    <!-- Background Orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
     <!-- Page Loader -->
     <div id="page-loader" class="page-loader">
         <div class="loader-content">
@@ -98,23 +112,28 @@
                 </div>
 
                 <div class="header-right">
-                    <!-- Theme Toggle -->
-                    <button class="theme-toggle-header" id="header-theme-toggle" aria-label="Toggle theme">
-                        <i class="fa-solid fa-moon"></i>
-                    </button>
+                    <!-- Modern Theme Toggle Slider -->
+                    <div class="theme-toggle-modern">
+                        <input type="checkbox" id="theme-toggle-checkbox" class="theme-toggle-checkbox">
+                        <label for="theme-toggle-checkbox" class="theme-toggle-slider">
+                            <span class="theme-icon theme-icon-light">
+                                <i class="fa-solid fa-sun"></i>
+                            </span>
+                            <span class="theme-icon theme-icon-dark">
+                                <i class="fa-solid fa-moon"></i>
+                            </span>
+                            <span class="theme-slider-ball"></span>
+                        </label>
+                    </div>
 
-                    <!-- Notification Bell -->
-                    <button class="notification-btn" id="notification-btn">
-                        <i class="fa-solid fa-bell"></i>
-                        <span class="notification-dot"></span>
-                    </button>
-
-                    <!-- User Profile -->
                     <!-- User Profile Container -->
                     <div class="user-profile-container">
                         <div class="user-profile" id="profile-trigger">
-                            <img src="https://ui-avatars.com/api/?name=User&background=random" id="user-avatar"
-                                alt="User" class="user-avatar">
+                            <div class="user-avatar-wrapper">
+                                <img src="https://ui-avatars.com/api/?name=User&background=random" id="user-avatar"
+                                    alt="User" class="user-avatar">
+                                <span class="user-status-indicator"></span>
+                            </div>
                             <div class="user-info">
                                 <span class="user-name" id="user-name">Loading...</span>
                                 <span class="user-role" id="user-email">...</span>
@@ -124,13 +143,31 @@
 
                         <!-- Profile Dropdown Menu -->
                         <div class="profile-dropdown" id="profile-dropdown">
-                            <div class="dropdown-header-mobile">
-                                <span class="dropdown-name" id="dropdown-user-name">User Name</span>
-                                <span class="dropdown-email" id="dropdown-user-email">email@example.com</span>
+                            <!-- User Info Card -->
+                            <div class="dropdown-user-card">
+                                <div class="dropdown-avatar-wrapper">
+                                    <img src="https://ui-avatars.com/api/?name=User&background=random"
+                                        id="dropdown-avatar" alt="User" class="dropdown-avatar">
+                                    <span class="dropdown-status-indicator"></span>
+                                </div>
+                                <div class="dropdown-user-info">
+                                    <span class="dropdown-name" id="dropdown-user-name">Loading...</span>
+                                    <span class="dropdown-email" id="dropdown-user-email">...</span>
+                                </div>
                             </div>
-                            <button class="dropdown-item logout-item" id="header-logout-btn">
-                                <i class="fa-solid fa-right-from-bracket"></i>
-                                <span>Logout</span>
+
+                            <!-- Divider -->
+                            <div class="dropdown-divider"></div>
+
+                            <!-- Logout Button -->
+                            <button class="dropdown-logout-btn" id="header-logout-btn">
+                                <div class="logout-btn-content">
+                                    <div class="logout-icon-wrapper">
+                                        <i class="fa-solid fa-right-from-bracket"></i>
+                                    </div>
+                                    <span class="logout-text">Sign Out</span>
+                                </div>
+                                <i class="fa-solid fa-arrow-right logout-arrow"></i>
                             </button>
                         </div>
                     </div>
@@ -184,7 +221,7 @@
             <section class="content-section" id="live-calls-section" style="display: none;">
                 <div class="section-header">
                     <h2>Live & Recent Calls</h2>
-                    <button class="btn-primary" id="refresh-live-calls">
+                    <button class="btn btn-primary" id="refresh-live-calls">
                         <i class="fa-solid fa-rotate-right"></i> Refresh
                     </button>
                 </div>
@@ -208,68 +245,77 @@
 
             <!-- Charts and Analytics Row -->
             <section class="charts-row" id="analytics-section">
-                <!-- Sentiment Distribution Chart -->
-                <div class="chart-card">
+                <!-- Sentiment Distribution Chart (Restructured) -->
+                <div class="chart-card sentiment-analysis-card">
                     <div class="card-header">
-                        <h2>Sentiment Distribution</h2>
+                        <div class="header-info">
+                            <h2>Sentiment Analysis</h2>
+                            <p class="card-subtitle">Distribution of call sentiments</p>
+                        </div>
                         <button class="card-action-btn">
-                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                            <i class="fa-solid fa-chart-pie"></i>
                         </button>
                     </div>
-                    <div class="chart-container">
-                        <canvas id="sentiment-chart"></canvas>
-                    </div>
-                    <div class="chart-legend" id="sentiment-legend">
-                        <div class="legend-item">
-                            <span class="legend-dot positive"></span>
-                            <span>Positive</span>
+
+                    <div class="sentiment-card-body">
+                        <div class="chart-wrapper-left">
+                            <div class="chart-container-inner">
+                                <canvas id="sentiment-chart"></canvas>
+                                <div class="chart-center-content">
+                                    <span class="center-label">Total</span>
+                                    <span class="center-value" id="sentiment-total-calls">0</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="legend-item">
-                            <span class="legend-dot neutral"></span>
-                            <span>Neutral</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-dot negative"></span>
-                            <span>Negative</span>
+
+                        <div class="chart-legend-right" id="sentiment-legend-v2">
+                            <!-- Legend Items -->
+                            <div class="legend-stat-item">
+                                <div class="stat-info-row">
+                                    <span class="stat-name">Positive</span>
+                                    <span class="stat-percent" id="percent-positive">0%</span>
+                                </div>
+                                <div class="mini-progress-bar">
+                                    <div class="progress-fill positive" id="bar-positive" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="legend-stat-item">
+                                <div class="stat-info-row">
+                                    <span class="stat-name">Neutral</span>
+                                    <span class="stat-percent" id="percent-neutral">0%</span>
+                                </div>
+                                <div class="mini-progress-bar">
+                                    <div class="progress-fill neutral" id="bar-neutral" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="legend-stat-item">
+                                <div class="stat-info-row">
+                                    <span class="stat-name">Negative</span>
+                                    <span class="stat-percent" id="percent-negative">0%</span>
+                                </div>
+                                <div class="mini-progress-bar">
+                                    <div class="progress-fill negative" id="bar-negative" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Tags Distribution Card -->
-                <div class="chart-card tags-card">
+                <!-- Top Categories Card (Restructured as Bar Chart) -->
+                <div class="chart-card categories-analysis-card">
                     <div class="card-header">
-                        <h2>Top Categories</h2>
+                        <div class="header-info">
+                            <h2>Top Categories</h2>
+                            <p class="card-subtitle">Call volume by tag</p>
+                        </div>
                         <button class="card-action-btn">
-                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                            <i class="fa-solid fa-chart-bar"></i>
                         </button>
                     </div>
-                    <div class="tags-list" id="tags-list">
-                        <div class="tag-item">
-                            <div class="tag-info">
-                                <span class="tag-name"><i class="fa-solid fa-headset"></i> Support</span>
-                                <span class="tag-count" id="support-count">0</span>
-                            </div>
-                            <div class="tag-bar">
-                                <div class="tag-progress support" id="support-bar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        <div class="tag-item">
-                            <div class="tag-info">
-                                <span class="tag-name"><i class="fa-solid fa-file-invoice-dollar"></i> Billing</span>
-                                <span class="tag-count" id="billing-count">0</span>
-                            </div>
-                            <div class="tag-bar">
-                                <div class="tag-progress billing" id="billing-bar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        <div class="tag-item">
-                            <div class="tag-info">
-                                <span class="tag-name"><i class="fa-solid fa-screwdriver-wrench"></i> Technical</span>
-                                <span class="tag-count" id="technical-count">0</span>
-                            </div>
-                            <div class="tag-bar">
-                                <div class="tag-progress technical" id="technical-bar" style="width: 0%"></div>
-                            </div>
+
+                    <div class="categories-card-body">
+                        <div class="bar-chart-container">
+                            <canvas id="categories-bar-chart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -283,8 +329,9 @@
                         <!-- Search Bar -->
                         <div class="search-wrapper">
                             <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                            <input type="text" id="call-search-input" name="search" class="search-input"
-                                placeholder="Search calls..." autocomplete="off">
+                            <input type="text" id="call-search-input" name="call_search_query_unique"
+                                class="search-input" placeholder="Search calls..." autocomplete="off" spellcheck="false"
+                                aria-autocomplete="none">
                         </div>
                         <button class="filter-btn" id="filter-btn">
                             <i class="fa-solid fa-filter"></i>
@@ -334,7 +381,7 @@
                             <i class="fa-solid fa-folder-open"></i>
                         </div>
                         <h3>No calls analyzed yet</h3>
-                        <p>Upload audio files to Google Drive to start analyzing</p>
+                        <p>Upload audio files to start analyzing</p>
                     </div>
 
                     <!-- Loading State -->
@@ -352,6 +399,49 @@
                     </button>
                     <div id="load-more-spinner" style="display: none; margin-top: 10px;">
                         <i class="fa-solid fa-spinner fa-spin"></i> Loading more...
+                    </div>
+                </div>
+            </section>
+
+            <!-- Live Calls Section -->
+            <section class="table-section section-hidden" id="live-calls-section" style="display: none;">
+                <div class="section-header">
+                    <h2>Live Active Calls</h2>
+                    <div class="table-controls">
+                        <div class="live-indicator-badge pulse"
+                            style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(34, 197, 94, 0.1); color: #22c55e; border-radius: 20px; font-size: 0.85rem; font-weight: 600; margin-right: 12px;">
+                            <i class="fa-solid fa-circle" style="font-size: 8px;"></i> Live Updates
+                        </div>
+                        <button class="refresh-btn" id="refresh-live-calls">
+                            <i class="fa-solid fa-rotate"></i>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-card">
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th width="15%">Status</th>
+                                    <th width="25%">Call ID</th>
+                                    <th width="40%">Started At</th>
+                                    <th width="20%">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="live-calls-table-body">
+                                <tr>
+                                    <td colspan="4"
+                                        style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                                        <div class="loading-spinner"
+                                            style="margin: 0 auto 10px; width: 24px; height: 24px; border: 2px solid #ddd; border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;">
+                                        </div>
+                                        <p>Connecting to real-time feed...</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>
@@ -687,10 +777,7 @@
                             <p>Loading summary...</p>
                         </div>
                     </div>
-                    <div class="content-section">
-                        <h4><i class="fa-solid fa-tags"></i> Tags</h4>
-                        <div class="modal-tags" id="modal-tags"></div>
-                    </div>
+
                 </div>
 
                 <!-- Transcript Tab Content -->
@@ -763,7 +850,7 @@
                     <i class="fa-solid fa-cloud-arrow-up modal-icon"></i>
                     <div class="modal-title-info">
                         <h2>Upload Audio Files</h2>
-                        <span class="meta-label">Batch upload scripts to Google Drive</span>
+                        <span class="meta-label">Upload and analyze call recordings</span>
                     </div>
                 </div>
                 <button class="modal-close" id="upload-modal-close">&times;</button>
@@ -794,39 +881,7 @@
                     </div>
                 </div>
 
-                <!-- Advanced Options -->
-                <div class="upload-advanced-trigger" id="upload-advanced-trigger">
-                    <span>Advanced Options</span>
-                    <i class="fa-solid fa-chevron-down"></i>
-                </div>
 
-                <div class="upload-advanced-content" id="upload-advanced-content" style="display: none;">
-                    <div class="advanced-grid">
-                        <div class="advanced-field">
-                            <label>Language Hint</label>
-                            <select id="upload-language" class="setting-select">
-                                <option value="auto">Auto Detect</option>
-                                <option value="ar">Arabic</option>
-                                <option value="en">English</option>
-                                <option value="ml">Malayalam</option>
-                                <option value="hi">Hindi</option>
-                                <option value="es">Spanish</option>
-                                <option value="fr">French</option>
-                            </select>
-                        </div>
-                        <div class="advanced-field">
-                            <label>Expected Speakers</label>
-                            <select id="upload-speakers" class="setting-select">
-                                <option value="0">Auto Detect</option>
-                                <option value="1">1 Speaker</option>
-                                <option value="2">2 Speakers</option>
-                                <option value="3">3 Speakers</option>
-                                <option value="4">4 Speakers</option>
-                            </select>
-                        </div>
-                    </div>
-                    <p class="advanced-hint">Manually selecting these can improve diarization for Arabic calls.</p>
-                </div>
 
                 <!-- Progress Section -->
                 <div class="upload-progress-section" id="upload-progress-section" style="display: none;">
@@ -856,7 +911,7 @@
                                 <i class="fa-solid fa-cloud-arrow-up"></i>
                             </div>
                             <div class="step-info">
-                                <span class="step-title">Uploading to Drive</span>
+                                <span class="step-title">Uploading to Supabase</span>
                                 <span class="step-status" id="step-upload-status">In progress...</span>
                             </div>
                             <div class="step-indicator">
@@ -1127,57 +1182,52 @@
         </div>
     </div>
 
-    <!-- Live Transcript Modal -->
-    <!-- Live Transcript Modal (Refactored) -->
+    <!-- Live Transcript Modal (Redesigned) -->
     <div class="modal" id="live-transcript-modal">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content modal-wide glass-modal-container">
-            <div class="modal-header-single glass-modal-header">
-                <!-- Left: Title with Live Badge -->
-                <div class="modal-title-section">
-                    <i class="fa-solid fa-tower-broadcast modal-icon" style="color: #ef4444;"></i>
-                    <div class="modal-title-info">
-                        <div class="title-with-badge">
-                            <h2>Live Transcript</h2>
-                            <span class="speaker-badge-inline">
-                                <i class="fa-solid fa-circle pulse" style="color: #22c55e; font-size: 8px;"></i>
-                                <span id="live-connection-status">Connecting...</span>
-                            </span>
+        <div class="modal-backdrop" id="live-modal-backdrop"></div>
+        <div class="live-chat-modal-content">
+            <div class="chat-container">
+                <!-- Header -->
+                <div class="chat-header">
+                    <button class="chat-back-btn" id="close-live-modal-top">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <div class="chat-user-info">
+                        <img src="https://ui-avatars.com/api/?name=AS&background=dcd7ff&color=581c87"
+                            class="chat-avatar-img" id="live-assistant-avatar">
+                        <div class="chat-user-details">
+                            <span class="chat-user-name">Vapi Assistant</span>
+                            <span class="chat-user-status" id="live-connection-status">Active now</span>
                         </div>
-                        <div class="modal-meta-inline">
-                            <span class="meta-badge"><i class="fa-solid fa-fingerprint"></i> <span
-                                    id="live-call-id">--</span></span>
-                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Body -->
+                <div class="chat-body" id="live-transcript-container">
+                    <div class="chat-date-separator">
+                        <span class="chat-date-text" id="live-chat-date">Today</span>
+                    </div>
+                    <!-- Messages will be injected here -->
+                    <div class="empty-state">
+                        <div class="loader-spinner" style="border-top-color:#9344B3; width:30px; height:30px;"></div>
+                        <p>Waiting for speech...</p>
                     </div>
                 </div>
 
-                <button class="close-modal" id="close-live-modal" aria-label="Close modal">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="modal-body glass-modal-body" id="live-transcript-container">
-                <!-- Live messages appear here -->
-                <div class="empty-state">
-                    <div class="loader-spinner" style="border-top-color:#9344B3; width:30px; height:30px;"></div>
-                    <p>Waiting for speech...</p>
+                <!-- Footer -->
+                <div class="chat-footer">
+                    <div class="chat-footer-actions">
+                        <button class="chat-btn-secondary" id="close-live-modal-btn">
+                            Close
+                        </button>
+                        <button class="chat-btn-primary" id="copy-live-btn">
+                            <i class="fa-solid fa-copy"></i> Copy Transcript
+                        </button>
+                    </div>
                 </div>
             </div>
-
-            <div class="modal-footer glass-modal-footer">
-                <button class="btn btn-secondary" id="close-live-modal-btn">
-                    Close
-                </button>
-                <button class="btn btn-primary" id="copy-live-btn"
-                    style="background: var(--accent-gradient); border: none;">
-                    <i class="fa-solid fa-copy"></i> Copy
-                </button>
-            </div>
         </div>
-    </div>
-    </span>
-    </div>
-    </div>
     </div>
 
     <!-- Toast Notifications Container -->
@@ -1189,12 +1239,18 @@
         base-color="#ffffff" accent-color="#9344B3" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;">
     </vapi-widget>
 
+    <!-- Inject Config from Backend -->
+    <script>
+        window.SUPABASE_URL = "{{ supabase_url }}";
+        window.SUPABASE_KEY = "{{ supabase_key }}";
+    </script>
+
     <!-- Load standard Vapi SDK script (Robust) -->
     <script src="https://unpkg.com/@vapi-ai/client-sdk-react/dist/embed/widget.umd.js" async defer></script>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="/static/js/main.js?v=4.17"></script>
-    <script src="/static/js/live_calls.js?v=1.4"></script>
+    <script src="/static/js/main.js?v=4.23"></script>
+    <script src="/static/js/live_calls.js?v=1.5"></script>
     <script src="/static/js/vapi_events.js?v=1.0"></script>
 </body>
 

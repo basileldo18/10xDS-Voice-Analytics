@@ -12,3 +12,6 @@ google-auth-httplib2
 google-auth-oauthlib
 groq
 itsdangerous
+werkzeug
+requests
+jinja2

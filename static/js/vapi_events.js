@@ -3,9 +3,9 @@
  * Handles automatic modal opening on call start and processing on call end.
  */
 
-document.addEventListener('DOMContentLoaded', async () => {
-    const widget = document.querySelector('vapi-widget');
-    console.log('[Vapi] Initializing event listeners...');
+// Define global initialization function
+window.initializeVapiEvents = async (widget) => {
+    console.log('[Vapi] Initializing event listeners for widget...', widget);
 
     if (!widget) {
         console.warn('[Vapi] Widget element not found.');
@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Wait for the custom element to be defined
     await customElements.whenDefined('vapi-widget');
+
+    // Remove existing listeners if any (cloneNode doesn't copy listeners, but good to be safe if reused)
+    // Note: We can't easily remove anonymous listeners, but we are attaching to a new node in the main flow.
 
     // --- 1. Call Start (Open Modal Automatically) ---
     widget.addEventListener('call-start', (event) => {
@@ -59,44 +62,49 @@ document.addEventListener('DOMContentLoaded', async () => {
             handleVapiCallEnd(detail);
         }
     });
+};
 
-    async function handleVapiCallEnd(callDetail) {
-        console.log('[Vapi] Handling call end:', callDetail);
+async function handleVapiCallEnd(callDetail) {
+    console.log('[Vapi] Handling call end:', callDetail);
 
-        // Extract recording URL if available immediately
-        const recordingUrl = callDetail?.recordingUrl ||
-            callDetail?.stereoRecordingUrl ||
-            callDetail?.artifact?.recordingUrl;
+    // Extract recording URL if available immediately
+    const recordingUrl = callDetail?.recordingUrl ||
+        callDetail?.stereoRecordingUrl ||
+        callDetail?.artifact?.recordingUrl;
 
-        if (recordingUrl) {
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const filename = `vapi_call_${timestamp}.wav`;
+    if (recordingUrl) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `vapi_call_${timestamp}.wav`;
 
-            if (window.notificationService) {
-                window.notificationService.showToast('Call Ended', 'Initiating processing...', 'info', 'fa-phone-slash');
-            }
-
-            try {
-                const response = await fetch('/api/vapi-call', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        recording_url: recordingUrl,
-                        filename: filename
-                    })
-                });
-
-                if (response.ok) {
-                    console.log('[Vapi] Backend processing triggered.');
-                }
-            } catch (err) {
-                console.error('[Vapi] Error triggering backend:', err);
-            }
+        if (window.notificationService) {
+            window.notificationService.showToast('Call Ended', 'Initiating processing...', 'info', 'fa-phone-slash');
         }
 
-        // Optional: Refresh list after a short delay
-        setTimeout(() => {
-            if (window.fetchLiveCalls) window.fetchLiveCalls();
-        }, 2000);
+        try {
+            const response = await fetch('/api/vapi-call', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    recording_url: recordingUrl,
+                    filename: filename
+                })
+            });
+
+            if (response.ok) {
+                console.log('[Vapi] Backend processing triggered.');
+            }
+        } catch (err) {
+            console.error('[Vapi] Error triggering backend:', err);
+        }
     }
+
+    // Optional: Refresh list after a short delay
+    setTimeout(() => {
+        if (window.fetchLiveCalls) window.fetchLiveCalls();
+    }, 2000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const widget = document.querySelector('vapi-widget');
+    window.initializeVapiEvents(widget);
 });

@@ -4,8 +4,13 @@
 // ============================================
 
 // Supabase Configuration
-const SUPABASE_URL = 'https://vsnzpmeuhsjqbkviebbf.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzbnpwbWV1aHNqcWJrdmllYmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NjcyOTMsImV4cCI6MjA4MDQ0MzI5M30.4-eEKIPw5pXHacQYcjK43puRNeCow1wS93XRVv9N7iM'; // Public Anon Key
+// Supabase Configuration
+const SUPABASE_URL = window.SUPABASE_URL; // Injected from index.html
+const SUPABASE_KEY = window.SUPABASE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.error("Supabase credentials missing from window config - check template injection");
+}
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 window.appSupabase = supabaseClient; // Use unique name to avoid conflict with library
@@ -14,6 +19,7 @@ window.appSupabase = supabaseClient; // Use unique name to avoid conflict with l
 let allCalls = [];
 let currentSearchTerm = '';
 let sentimentChart = null;
+let categoriesChart = null;
 let currentOffset = 0;
 const PAGE_SIZE = 20;
 let hasMoreCalls = true;
@@ -74,6 +80,7 @@ class NotificationService {
         if (data.step) {
             const stepConfig = {
                 'start': { title: '🎙️ New Call', icon: 'fa-microphone', type: 'processing' },
+                'drive_import': { title: '📂 Google Drive', icon: 'fa-brands fa-google-drive', type: 'info' },
                 'download': { title: '⬇️ Downloading', icon: 'fa-download', type: 'processing' },
                 'upload': { title: '☁️ Uploading', icon: 'fa-cloud-upload-alt', type: 'processing' },
                 'analyze': { title: '🧠 Analyzing', icon: 'fa-brain', type: 'processing' },
@@ -91,7 +98,7 @@ class NotificationService {
             if (data.status === 'error') toastType = 'error';
 
             // Show toast for important steps
-            if (['start', 'upload', 'done', 'error'].includes(data.step) || data.status === 'complete' || data.status === 'error') {
+            if (['start', 'drive_import', 'upload', 'done', 'error'].includes(data.step) || data.status === 'complete' || data.status === 'error') {
                 this.showToast(config.title, data.message, toastType, config.icon);
             }
 
@@ -152,9 +159,14 @@ class NotificationService {
         const toast = document.createElement('div');
         toast.className = `vapi-toast ${type}`;
 
+        // Determine icon class (allow passing full classes like 'fa-brands fa-google-drive')
+        const finalIconClass = (iconClass.includes('fa-solid') || iconClass.includes('fa-brands') || iconClass.includes('fa-regular'))
+            ? iconClass
+            : `fa-solid ${iconClass}`;
+
         toast.innerHTML = `
             <div class="vapi-toast-icon">
-                <i class="fa-solid ${iconClass}"></i>
+                <i class="${finalIconClass}"></i>
             </div>
             <div class="vapi-toast-content">
                 <div class="vapi-toast-title">${title}</div>
@@ -232,10 +244,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupLogout();
 
     // Fetch and Display Data
-    await fetchCalls();
+    await fetchCalls(false, true); // Force initial load
 
-    // Initialize Chart
+    // Initialize Charts
     initializeSentimentChart();
+    initializeCategoriesChart();
 
     // Sync Settings in Background
     syncSettingsFromApi();
@@ -467,7 +480,8 @@ function updatePageTitle(section) {
         'calls': { title: 'Call Records', subtitle: 'View and manage all analyzed calls' },
         'analytics': { title: 'Analytics', subtitle: 'Sentiment distribution and category insights' },
         'reports': { title: 'Reports', subtitle: 'Generate and download reports' },
-        'settings': { title: 'Settings', subtitle: 'Manage your account and preferences' }
+        'settings': { title: 'Settings', subtitle: 'Manage your account and preferences' },
+        'live-calls': { title: 'Live Calls', subtitle: 'Monitor active Vapi conversations in real-time' }
     };
 
     const titleData = titles[section] || titles['dashboard'];
@@ -514,6 +528,12 @@ async function handleLogout() {
         await fetch('/api/auth/logout', { method: 'POST' });
         // Then sign out from Supabase
         await supabaseClient.auth.signOut();
+
+        // Clear search input if present
+        const searchInput = document.getElementById('call-search-input');
+        if (searchInput) searchInput.value = '';
+        currentSearchTerm = '';
+
     } catch (err) {
         console.error('Logout error:', err);
     }
@@ -567,7 +587,7 @@ function initializeRefreshButton() {
     if (refreshBtn) {
         refreshBtn.addEventListener('click', async () => {
             refreshBtn.classList.add('loading');
-            await fetchCalls();
+            await fetchCalls(false, true); // Force refresh when manually triggered
             initializeSentimentChart();
             refreshBtn.classList.remove('loading');
             showToast('Data refreshed successfully', 'success');
@@ -872,8 +892,8 @@ function initializeUploadButton() {
         if (advancedTrigger) advancedTrigger.style.display = 'none';
         if (advancedContent) advancedContent.style.display = 'none';
 
-        const langVal = document.getElementById('upload-language').value;
-        const speakersVal = document.getElementById('upload-speakers').value;
+        const langVal = 'auto';
+        const speakersVal = '0';
 
         let successCount = 0;
         let failCount = 0;
@@ -946,13 +966,13 @@ function initializeUploadButton() {
         if (failCount > 0) {
             // Let them see the errors, but hide the upload button
             uploadSubmitBtn.style.display = 'none';
-            fetchCalls();
+            fetchCalls(false, true);
             if (typeof initializeSentimentChart === 'function') initializeSentimentChart();
         } else {
             // Auto-close only if all were successful
             setTimeout(() => {
                 closeModal();
-                fetchCalls();
+                fetchCalls(false, true);
                 if (typeof initializeSentimentChart === 'function') initializeSentimentChart();
             }, 3000);
         }
@@ -1174,8 +1194,37 @@ function timeAgo(date) {
 // Fetch Calls Data
 // ============================================
 const autoRefreshTimerObj = { id: null };
+let lastFetchTime = 0;
+const MIN_FETCH_INTERVAL = 20000; // 20 seconds in milliseconds
 
-async function fetchCalls(append = false) {
+async function fetchStats() {
+    try {
+        console.log('[API CHECK] Fetching call statistics...');
+        const response = await fetch('/api/call-stats');
+
+        if (response.ok) {
+            const result = await response.json();
+            if (result.stats) {
+                globalStats = result.stats;
+                console.log('[API CHECK] Stats received:', globalStats);
+                updateStats(globalStats);
+                initializeCategoriesChart(globalStats.tag_counts);
+                initializeSentimentChart();
+            }
+        }
+    } catch (e) {
+        console.error("Failed to fetch stats", e);
+    }
+}
+
+async function fetchCalls(append = false, force = false) {
+    // Throttle API calls to prevent excessive requests
+    const now = Date.now();
+    if (!force && !append && (now - lastFetchTime) < MIN_FETCH_INTERVAL) {
+        console.log(`[API THROTTLE] Skipping fetch - only ${Math.round((now - lastFetchTime) / 1000)}s since last fetch (min: 20s)`);
+        return;
+    }
+
     const loadingState = document.getElementById('loading-state');
     const emptyState = document.getElementById('empty-state');
     const tableContainer = document.querySelector('.table-container');
@@ -1187,6 +1236,9 @@ async function fetchCalls(append = false) {
         currentOffset = 0;
         hasMoreCalls = true;
         if (allCalls.length === 0 && loadingState) loadingState.style.display = 'flex';
+
+        // Trigger stats fetch independently (non-blocking)
+        fetchStats();
     } else {
         if (loadMoreBtn) loadMoreBtn.style.display = 'none';
         if (loadMoreSpinner) loadMoreSpinner.style.display = 'block';
@@ -1197,6 +1249,12 @@ async function fetchCalls(append = false) {
     try {
         const response = await fetch(`/api/calls?offset=${currentOffset}&limit=${PAGE_SIZE}&_t=${Date.now()}`);
         if (!response.ok) throw new Error('Failed to fetch calls');
+
+        // Update last fetch time on successful response
+        if (!append) {
+            lastFetchTime = Date.now();
+            console.log('[API CHECK] Fetch completed - next fetch allowed in 20s');
+        }
 
         const result = await response.json();
         console.log('[API DEBUG] Fetch result:', result);
@@ -1209,7 +1267,7 @@ async function fetchCalls(append = false) {
         } else if (result && typeof result === 'object') {
             calls = result.calls || [];
             totalCallsCount = result.total || 0;
-            globalStats = result.stats || null;
+            // Note: Stats are now fetched separately via fetchStats()
         }
 
         if (append) {
@@ -1254,13 +1312,23 @@ async function fetchCalls(append = false) {
             }
 
             applyFilters();
-            updateStats(globalStats || allCalls);
-            updateTagsCard(globalStats ? globalStats.tag_counts : allCalls);
+            initializeCategoriesChart(globalStats ? globalStats.tag_counts : allCalls);
         }
+
+        console.log('[DEBUG] Calling updateStats with totalCallsCount:', totalCallsCount);
+        // CRITICAL FIX: Always update stats, even if list is empty (e.g. filtered view or just loaded)
+        updateStats(globalStats || allCalls);
 
         // Update call count badge (show the TOTAL count)
         const badge = document.getElementById('call-count-badge');
         if (badge) badge.textContent = totalCallsCount;
+
+        // CRITICAL: Directly update the dashboard card too, bypassing animation issues
+        const totalCardEl = document.getElementById('total-calls');
+        if (totalCardEl) {
+            console.log('[DEBUG] Directly updating total-calls card to:', totalCallsCount);
+            totalCardEl.textContent = totalCallsCount;
+        }
 
     } catch (error) {
         console.error('Error fetching calls:', error);
@@ -1576,7 +1644,7 @@ if (adminVerifyConfirm) {
                 showToast('Call deleted successfully', 'success');
                 closeDeleteModal();
                 // Refresh list
-                await fetchCalls();
+                await fetchCalls(false, true);
                 initializeSentimentChart(); // Update charts
             } else {
                 showToast(result.error || 'Delete failed', 'error');
@@ -1644,7 +1712,7 @@ function openReanalyzeModal(callId) {
                         call.tags = result.tags;
                         call.summary = typeof result.summary === 'string' ? result.summary : JSON.stringify(result.summary);
                         // Refresh table and charts
-                        fetchCalls(false);
+                        fetchCalls(false, true);
                     }
                     closeDeleteModal();
                 } else {
@@ -1698,9 +1766,19 @@ function updateStats(data) {
             Math.round(callsWithDuration.reduce((sum, c) => sum + (c.duration || 0), 0) / callsWithDuration.length) : 0;
     } else if (typeof data === 'object') {
         // Global stats from backend
-        const total = totalCallsCount || 1;
         const posCount = (data.sentiment && data.sentiment.positive) || 0;
         const negCount = (data.sentiment && data.sentiment.negative) || 0;
+        const neuCount = (data.sentiment && data.sentiment.neutral) || 0;
+
+        // Robustness: If main totalCallsCount is 0 but we have stats content, use the sum
+        const statsTotal = posCount + negCount + neuCount;
+        if (totalCallsCount === 0 && statsTotal > 0) {
+            console.log('[STATS] Using derived stats total:', statsTotal);
+            totalCallsCount = statsTotal;
+            if (totalEl) animateCounter(totalEl, totalCallsCount);
+        }
+
+        const total = totalCallsCount || (statsTotal > 0 ? statsTotal : 1);
 
         positivePercent = Math.round((posCount / total) * 100);
         negativePercent = Math.round((negCount / total) * 100);
@@ -1724,8 +1802,16 @@ function updateStats(data) {
 // ============================================
 // Update Tags Card
 // ============================================
-function updateTagsCard(data) {
-    if (!data) return;
+function initializeCategoriesChart(data) {
+    const canvas = document.getElementById('categories-bar-chart');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+
+    // If data is not provided, use globalStats or allCalls
+    if (!data) {
+        data = globalStats ? globalStats.tag_counts : allCalls;
+    }
 
     let tagCounts = {
         'Support': 0,
@@ -1734,7 +1820,6 @@ function updateTagsCard(data) {
     };
 
     if (Array.isArray(data)) {
-        // Fallback: Calculate from provided array
         data.forEach(call => {
             const tags = call.tags || [];
             tags.forEach(tag => {
@@ -1745,7 +1830,6 @@ function updateTagsCard(data) {
             });
         });
     } else if (typeof data === 'object') {
-        // use backend-provided counts
         tagCounts = {
             'Support': data.Support || 0,
             'Billing': data.Billing || 0,
@@ -1753,25 +1837,91 @@ function updateTagsCard(data) {
         };
     }
 
-    const maxCount = Math.max(...Object.values(tagCounts), 1);
+    // Destroy existing chart
+    if (categoriesChart) {
+        categoriesChart.destroy();
+    }
 
-    // Update each tag element
-    const tagMapping = {
-        'Support': { count: 'support-count', bar: 'support-bar' },
-        'Billing': { count: 'billing-count', bar: 'billing-bar' },
-        'Technical': { count: 'technical-count', bar: 'technical-bar' }
-    };
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const barColor = isDark ? '#6366f1' : '#6366f1';
+    const barColorLight = isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.2)';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
 
-    Object.entries(tagCounts).forEach(([name, count]) => {
-        const mapping = tagMapping[name];
-        if (mapping) {
-            const countEl = document.getElementById(mapping.count);
-            const barEl = document.getElementById(mapping.bar);
+    // Labels and Data
+    const labels = Object.keys(tagCounts);
+    const values = Object.values(tagCounts);
 
-            if (countEl) countEl.textContent = count;
-            if (barEl) {
-                const percentage = (count / maxCount) * 100;
-                barEl.style.width = `${percentage}%`;
+    categoriesChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: [
+                    '#818cf8', // Lighter
+                    '#6366f1', // Main
+                    '#4f46e5'  // Darker
+                ],
+                borderRadius: 12,
+                borderSkipped: false,
+                barThickness: 40,
+                maxBarThickness: 50
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: isDark ? '#1e293b' : 'white',
+                    titleColor: isDark ? '#f1f5f9' : '#0f172a',
+                    bodyColor: isDark ? '#f1f5f9' : '#0f172a',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    displayColors: false
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false,
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: textColor,
+                        font: {
+                            family: "'Inter', sans-serif",
+                            size: 11,
+                            weight: '600'
+                        }
+                    }
+                },
+                y: {
+                    grid: {
+                        color: gridColor,
+                        borderDash: [5, 5],
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: textColor,
+                        font: {
+                            family: "'Inter', sans-serif",
+                            size: 11,
+                            weight: '600'
+                        },
+                        stepSize: Math.max(1, Math.ceil(Math.max(...values, 1) / 4)),
+                        callback: function (value) {
+                            if (value % 1 === 0) return value;
+                        }
+                    },
+                    beginAtZero: true
+                }
             }
         }
     });
@@ -1813,6 +1963,33 @@ function initializeSentimentChart() {
         sentimentChart.destroy();
     }
 
+    // Determine colors based on theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const tooltipBg = isDark ? '#1e293b' : 'white';
+    const tooltipText = isDark ? '#f1f5f9' : '#0f172a';
+    const tooltipBorder = isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0';
+
+    // Calculate total and percentages
+    const total = positive + neutral + negative;
+    const posPercent = total > 0 ? Math.round((positive / total) * 100) : 0;
+    const neuPercent = total > 0 ? Math.round((neutral / total) * 100) : 0;
+    const negPercent = total > 0 ? Math.round((negative / total) * 100) : 0;
+
+    // Update UI elements
+    const totalEl = document.getElementById('sentiment-total-calls');
+    if (totalEl) totalEl.textContent = total;
+
+    const updateLevel = (id, percent, barId) => {
+        const percentEl = document.getElementById(id);
+        const barEl = document.getElementById(barId);
+        if (percentEl) percentEl.textContent = `${percent}%`;
+        if (barEl) barEl.style.width = `${percent}%`;
+    };
+
+    updateLevel('percent-positive', posPercent, 'bar-positive');
+    updateLevel('percent-neutral', neuPercent, 'bar-neutral');
+    updateLevel('percent-negative', negPercent, 'bar-negative');
+
     // Create new chart
     sentimentChart = new Chart(ctx, {
         type: 'doughnut',
@@ -1821,39 +1998,34 @@ function initializeSentimentChart() {
             datasets: [{
                 data: [positive, neutral, negative],
                 backgroundColor: [
-                    '#10b981', // Green
-                    '#64748b', // Gray
-                    '#ef4444'  // Red
+                    isDark ? '#22c55e' : '#10b981', // Positive
+                    isDark ? '#64748b' : '#cbd5e1', // Neutral
+                    isDark ? '#ef4444' : '#ef4444'  // Negative
                 ],
-                borderWidth: 0,
-                hoverOffset: 8
+                borderWidth: isDark ? 2 : 0,
+                borderColor: isDark ? '#1e293b' : 'transparent',
+                hoverOffset: 15,
+                borderRadius: isDark ? 6 : 4
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '70%',
+            cutout: '80%', // Slightly thinner for more elegance
             plugins: {
                 legend: {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: 'white',
-                    titleColor: '#0f172a',
-                    bodyColor: '#475569',
-                    borderColor: '#e2e8f0',
+                    backgroundColor: tooltipBg,
+                    titleColor: tooltipText,
+                    bodyColor: tooltipText,
+                    borderColor: tooltipBorder,
                     borderWidth: 1,
                     padding: 12,
-                    boxPadding: 6,
-                    usePointStyle: true,
-                    callbacks: {
-                        label: function (context) {
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = total > 0 ?
-                                Math.round((context.raw / total) * 100) : 0;
-                            return `${context.label}: ${context.raw} (${percentage}%)`;
-                        }
-                    }
+                    cornerRadius: 8,
+                    displayColors: true,
+                    usePointStyle: true
                 }
             },
             animation: {
@@ -1867,7 +2039,7 @@ function initializeSentimentChart() {
 // ============================================
 // Modal Functions
 // ============================================
-window.openModal = function (callId) {
+window.openModal = async function (callId) {
     const modal = document.getElementById('transcript-modal');
     const modalFilename = document.getElementById('modal-filename');
     const modalText = document.getElementById('modal-text');
@@ -1879,18 +2051,104 @@ window.openModal = function (callId) {
     const audioStatus = document.getElementById('audio-status');
 
     // Find call data
-    const call = allCalls.find(c => c.id === callId);
+    let call = allCalls.find(c => c.id === callId);
 
     if (!call) {
         showToast('Call not found', 'error');
         return;
     }
 
-    // Populate modal
+    // Show modal immediately
+    if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    // Populate filename immediately (available in list data)
     if (modalFilename) {
         modalFilename.textContent = call.filename || 'Unknown';
-        // Add title attribute to show full filename on hover
         modalFilename.title = call.filename || 'Unknown';
+    }
+
+    // Lazy Load: Check if we have transcript/diarization. If not, fetch it.
+    if (!call.transcript && !call.diarization_data) {
+        console.log(`[MODAL] Fetching details for call ${callId}...`);
+
+        // Show Loading Overlay
+        const modalContent = modal.querySelector('.modal-content');
+        let loader = modalContent.querySelector('.modal-loading-overlay');
+        if (!loader) {
+            loader = document.createElement('div');
+            loader.className = 'modal-loading-overlay';
+            loader.innerHTML = `
+                <div class="loading-spinner"></div>
+                <p>Loading call details...</p>
+                <style>
+                    .modal-loading-overlay {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(255, 255, 255, 0.9);
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 100;
+                        border-radius: 12px;
+                        backdrop-filter: blur(4px);
+                    }
+                    .dark-mode .modal-loading-overlay {
+                        background: rgba(30, 41, 59, 0.9);
+                    }
+                    .modal-loading-overlay .loading-spinner {
+                        border: 3px solid rgba(99, 102, 241, 0.2);
+                        border-top: 3px solid #6366f1;
+                        border-radius: 50%;
+                        width: 40px;
+                        height: 40px;
+                        animation: spin 1s linear infinite;
+                        margin-bottom: 16px;
+                    }
+                    .modal-loading-overlay p {
+                        color: var(--text-secondary);
+                        font-weight: 500;
+                    }
+                </style>
+            `;
+            // Ensure modal content is relative so absolute positioning works
+            if (getComputedStyle(modalContent).position === 'static') {
+                modalContent.style.position = 'relative';
+            }
+            modalContent.appendChild(loader);
+        }
+        loader.style.display = 'flex';
+
+        try {
+            const response = await fetch(`/api/calls/${callId}`);
+            if (response.ok) {
+                const fullData = await response.json();
+                // Merge full data into the existing call object (updates cache)
+                Object.assign(call, fullData);
+                console.log('[MODAL] Details loaded successfully.');
+            } else {
+                console.error('[MODAL] Failed to load details:', response.status);
+                showToast('Failed to load call details', 'error');
+            }
+        } catch (e) {
+            console.error('[MODAL] Error loading details:', e);
+            showToast('Error loading call details', 'error');
+        } finally {
+            // Hide Loader
+            if (loader) {
+                loader.style.animation = 'fadeOut 0.3s ease forwards';
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    loader.style.animation = ''; // Reset for next time
+                }, 300);
+            }
+        }
     }
 
     // Populate transcript with diarization if available
@@ -2575,8 +2833,8 @@ function setupTranslationButton(call) {
                             translationHtml += `
                                 <div class="utterance-line" data-index="${idx}">
                                     <span class="utterance-timestamp clickable-timestamp" data-time="${startTimeMs}" title="Click to jump to this point">[${timestamp}]</span>
-                                    <span class="speaker-label ${speakerClass}" contenteditable="true" data-original="${escapeHtml(originalSpeaker)}">${escapeHtml(displaySpeaker)}</span>
-                                    <span class="utterance-text" contenteditable="true">${escapeHtml(utterance.text)}</span>
+                                    <span class="speaker-label ${speakerClass}" data-original="${escapeHtml(originalSpeaker)}">${escapeHtml(displaySpeaker)}</span>
+                                    <span class="utterance-text">${escapeHtml(utterance.text)}</span>
                                 </div>
                             `;
                         });
@@ -2586,9 +2844,6 @@ function setupTranslationButton(call) {
 
                         // Setup clickable timestamps for translated content
                         setupTimestampClickListeners();
-
-                        // Setup editable speaker names for translation (syncs with original diarization)
-                        setupTranslatedSpeakerEditListeners(call.id, call.diarization_data, translatedDiarization);
                     } else if (result.translated_text) {
                         // Plain text translation fallback
                         translationHtml += '<div class="translated-transcript">';
@@ -3066,6 +3321,37 @@ window.closeFilenamePopup = function () {
 // ============================================
 // Utility Functions
 // ============================================
+
+// Robust JSON parser that handles Markdown code blocks and extra text
+function tryParseJSON(text) {
+    if (!text) return null;
+    if (typeof text === 'object') return text;
+
+    let cleanText = text.trim();
+
+    // Remove Markdown code blocks if present
+    if (cleanText.includes('```')) {
+        cleanText = cleanText.replace(/```json/g, '').replace(/```/g, '');
+    }
+
+    // Try parsing
+    try {
+        return JSON.parse(cleanText);
+    } catch (e) {
+        // If simple parse fails, try extracting from { }
+        try {
+            const startStr = cleanText.indexOf('{');
+            const endStr = cleanText.lastIndexOf('}');
+            if (startStr !== -1 && endStr !== -1) {
+                return JSON.parse(cleanText.substring(startStr, endStr + 1));
+            }
+        } catch (e2) {
+            // Failed
+        }
+    }
+    return null;
+}
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -3087,12 +3373,24 @@ function escapeHtml(text) {
 
 function animateCounter(element, target, suffix = '') {
     const duration = 1000;
-    const start = parseInt(element.textContent) || 0;
+    // Handle non-numeric content safely
+    let startVal = parseInt(element.textContent);
+    if (isNaN(startVal)) startVal = 0;
+
+    const start = startVal;
+
+    // Optimisation: If already at target, stop.
+    if (start === target) {
+        element.textContent = target + suffix;
+        return;
+    }
+
     const increment = (target - start) / (duration / 16);
     let current = start;
 
     const step = () => {
         current += increment;
+        // Check if we passed the target or if increment is 0 (safety)
         if ((increment > 0 && current >= target) || (increment < 0 && current <= target)) {
             element.textContent = target + suffix;
         } else {
@@ -3137,12 +3435,31 @@ function initializeSettings() {
 }
 
 function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
+    const isDark = theme === 'dark';
 
-    // Update theme buttons
+    if (isDark) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        // Actually, some styles might rely on the absence of data-theme or presence of data-theme="light"
+        // Let's set it to light explicitly to be safe, or remove it if that's what's expected.
+        // Based on style.css, it uses [data-theme="dark"] for overrides.
+    }
+
+    // Update Header Theme Toggle
+    const themeToggle = document.getElementById('theme-toggle-checkbox');
+    if (themeToggle) {
+        themeToggle.checked = isDark;
+    }
+
+    // Update old theme buttons
     document.querySelectorAll('.theme-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.theme === theme);
     });
+
+    // Update Charts
+    if (typeof initializeSentimentChart === 'function') initializeSentimentChart();
+    if (typeof initializeCategoriesChart === 'function') initializeCategoriesChart();
 }
 
 function updateSettingsUI(settings) {
@@ -3188,11 +3505,26 @@ function setupSettingsListeners() {
             const theme = btn.dataset.theme;
             applyTheme(theme);
 
-            // Update active state
-            document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+            // Sync with settings
+            const settings = JSON.parse(localStorage.getItem('voxanalyze-settings')) || defaultSettings;
+            settings.theme = theme;
+            localStorage.setItem('voxanalyze-settings', JSON.stringify(settings));
         });
     });
+
+    // Modern Header Theme Toggle
+    const headerThemeToggle = document.getElementById('theme-toggle-checkbox');
+    if (headerThemeToggle) {
+        headerThemeToggle.addEventListener('change', () => {
+            const theme = headerThemeToggle.checked ? 'dark' : 'light';
+            applyTheme(theme);
+
+            // Sync with settings
+            const settings = JSON.parse(localStorage.getItem('voxanalyze-settings')) || defaultSettings;
+            settings.theme = theme;
+            localStorage.setItem('voxanalyze-settings', JSON.stringify(settings));
+        });
+    }
 
     // Animations toggle - apply immediately
     const animationsToggle = document.getElementById('setting-animations');
@@ -3486,8 +3818,149 @@ async function translateMinutes(callId, language, event) {
         return;
     }
 
-    // Show loading toast
-    showToast('Translating minutes...', 'info');
+    // Show persistent loading indicator in modal
+    const modalMinutes = document.getElementById('modal-minutes');
+    if (modalMinutes) {
+        modalMinutes.innerHTML = `
+            <div style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 80px 40px;
+                gap: 24px;
+                background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%);
+                border-radius: 16px;
+                position: relative;
+                overflow: hidden;
+            ">
+                <!-- Animated background gradient -->
+                <div style="
+                    position: absolute;
+                    top: -50%;
+                    left: -50%;
+                    width: 200%;
+                    height: 200%;
+                    background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+                    animation: rotate 8s linear infinite;
+                "></div>
+                
+                <!-- Floating particles -->
+                <div style="
+                    position: absolute;
+                    width: 100%;
+                    height: 100%;
+                    top: 0;
+                    left: 0;
+                    overflow: hidden;
+                ">
+                    <div style="position: absolute; top: 20%; left: 10%; width: 4px; height: 4px; background: rgba(99, 102, 241, 0.4); border-radius: 50%; animation: float 3s ease-in-out infinite;"></div>
+                    <div style="position: absolute; top: 60%; left: 80%; width: 6px; height: 6px; background: rgba(168, 85, 247, 0.4); border-radius: 50%; animation: float 4s ease-in-out infinite 1s;"></div>
+                    <div style="position: absolute; top: 40%; left: 70%; width: 3px; height: 3px; background: rgba(99, 102, 241, 0.3); border-radius: 50%; animation: float 5s ease-in-out infinite 2s;"></div>
+                </div>
+                
+                <!-- Main icon container -->
+                <div style="
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 80px;
+                    height: 80px;
+                    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+                    border-radius: 20px;
+                    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3), 0 0 0 0 rgba(99, 102, 241, 0.4);
+                    animation: pulse-ring 2s ease-in-out infinite;
+                ">
+                    <i class="fa-solid fa-language" style="
+                        color: white;
+                        font-size: 36px;
+                        animation: bounce-subtle 2s ease-in-out infinite;
+                    "></i>
+                </div>
+                
+                <!-- Text content -->
+                <div style="position: relative; text-align: center; z-index: 1;">
+                    <p style="
+                        font-size: 20px;
+                        font-weight: 700;
+                        color: var(--text-primary);
+                        margin: 0 0 8px 0;
+                        letter-spacing: -0.02em;
+                    ">Translating to ${getLanguageName(language)}</p>
+                    
+                    <!-- Animated dots -->
+                    <div style="display: flex; justify-content: center; gap: 6px; margin-bottom: 12px;">
+                        <div style="width: 8px; height: 8px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 50%; animation: dot-bounce 1.4s ease-in-out infinite;"></div>
+                        <div style="width: 8px; height: 8px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 50%; animation: dot-bounce 1.4s ease-in-out infinite 0.2s;"></div>
+                        <div style="width: 8px; height: 8px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 50%; animation: dot-bounce 1.4s ease-in-out infinite 0.4s;"></div>
+                    </div>
+                    
+                    <p style="
+                        font-size: 14px;
+                        color: var(--text-secondary);
+                        margin: 0;
+                        font-weight: 500;
+                    ">This may take a few moments</p>
+                </div>
+                
+                <!-- Progress bar -->
+                <div style="
+                    width: 200px;
+                    height: 4px;
+                    background: rgba(99, 102, 241, 0.1);
+                    border-radius: 2px;
+                    overflow: hidden;
+                    position: relative;
+                    z-index: 1;
+                ">
+                    <div style="
+                        width: 100%;
+                        height: 100%;
+                        background: linear-gradient(90deg, #6366f1, #a855f7, #6366f1);
+                        background-size: 200% 100%;
+                        animation: shimmer 2s linear infinite;
+                    "></div>
+                </div>
+            </div>
+            
+            <style>
+                @keyframes pulse-ring {
+                    0%, 100% {
+                        box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3), 0 0 0 0 rgba(99, 102, 241, 0.4);
+                    }
+                    50% {
+                        box-shadow: 0 8px 32px rgba(99, 102, 241, 0.4), 0 0 0 20px rgba(99, 102, 241, 0);
+                    }
+                }
+                
+                @keyframes bounce-subtle {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-8px); }
+                }
+                
+                @keyframes rotate {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                
+                @keyframes float {
+                    0%, 100% { transform: translateY(0); opacity: 0.3; }
+                    50% { transform: translateY(-20px); opacity: 0.8; }
+                }
+                
+                @keyframes dot-bounce {
+                    0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+                    40% { transform: scale(1); opacity: 1; }
+                }
+                
+                @keyframes shimmer {
+                    0% { background-position: -200% 0; }
+                    100% { background-position: 200% 0; }
+                }
+            </style>
+        `;
+    }
 
     try {
         const summaryText = call.summary || '';
@@ -3518,10 +3991,20 @@ async function translateMinutes(callId, language, event) {
             updateMinutesWithTranslation(callId, result.translated_text, language);
             showToast(`Translated to ${getLanguageName(language)}!`, 'success');
         } else {
-            throw new Error('Translation error');
+            // Restore original content on error
+            const call = allCalls.find(c => c.id === callId);
+            if (call) {
+                openModal(callId); // Refresh modal to show original content
+            }
+            showToast('Translation failed. Please try again.', 'error');
         }
     } catch (error) {
         console.error('Translation error:', error);
+        // Restore original content on error
+        const call = allCalls.find(c => c.id === callId);
+        if (call) {
+            openModal(callId); // Refresh modal to show original content
+        }
         showToast('Translation failed. Please try again.', 'error');
     }
 }
@@ -3640,12 +4123,7 @@ function updateMinutesWithTranslation(callId, translatedText, language) {
     const ui = getUITranslations(language);
 
     // Parse translated text as JSON if possible
-    let translatedData = null;
-    try {
-        translatedData = JSON.parse(translatedText);
-    } catch (e) {
-        // Not JSON, use as plain text
-    }
+    const translatedData = tryParseJSON(translatedText);
 
     const modalMinutes = document.getElementById('modal-minutes');
     if (!modalMinutes) return;
@@ -3931,8 +4409,149 @@ async function translateSummary(callId, language, event) {
         return;
     }
 
-    // Show loading toast
-    showToast('Translating summary...', 'info');
+    // Show persistent loading indicator in modal
+    const modalSummary = document.getElementById('modal-summary');
+    if (modalSummary) {
+        modalSummary.innerHTML = `
+            <div style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 80px 40px;
+                gap: 24px;
+                background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%);
+                border-radius: 16px;
+                position: relative;
+                overflow: hidden;
+            ">
+                <!-- Animated background gradient -->
+                <div style="
+                    position: absolute;
+                    top: -50%;
+                    left: -50%;
+                    width: 200%;
+                    height: 200%;
+                    background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+                    animation: rotate 8s linear infinite;
+                "></div>
+                
+                <!-- Floating particles -->
+                <div style="
+                    position: absolute;
+                    width: 100%;
+                    height: 100%;
+                    top: 0;
+                    left: 0;
+                    overflow: hidden;
+                ">
+                    <div style="position: absolute; top: 20%; left: 10%; width: 4px; height: 4px; background: rgba(99, 102, 241, 0.4); border-radius: 50%; animation: float 3s ease-in-out infinite;"></div>
+                    <div style="position: absolute; top: 60%; left: 80%; width: 6px; height: 6px; background: rgba(168, 85, 247, 0.4); border-radius: 50%; animation: float 4s ease-in-out infinite 1s;"></div>
+                    <div style="position: absolute; top: 40%; left: 70%; width: 3px; height: 3px; background: rgba(99, 102, 241, 0.3); border-radius: 50%; animation: float 5s ease-in-out infinite 2s;"></div>
+                </div>
+                
+                <!-- Main icon container -->
+                <div style="
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 80px;
+                    height: 80px;
+                    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+                    border-radius: 20px;
+                    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3), 0 0 0 0 rgba(99, 102, 241, 0.4);
+                    animation: pulse-ring 2s ease-in-out infinite;
+                ">
+                    <i class="fa-solid fa-language" style="
+                        color: white;
+                        font-size: 36px;
+                        animation: bounce-subtle 2s ease-in-out infinite;
+                    "></i>
+                </div>
+                
+                <!-- Text content -->
+                <div style="position: relative; text-align: center; z-index: 1;">
+                    <p style="
+                        font-size: 20px;
+                        font-weight: 700;
+                        color: var(--text-primary);
+                        margin: 0 0 8px 0;
+                        letter-spacing: -0.02em;
+                    ">Translating to ${getLanguageName(language)}</p>
+                    
+                    <!-- Animated dots -->
+                    <div style="display: flex; justify-content: center; gap: 6px; margin-bottom: 12px;">
+                        <div style="width: 8px; height: 8px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 50%; animation: dot-bounce 1.4s ease-in-out infinite;"></div>
+                        <div style="width: 8px; height: 8px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 50%; animation: dot-bounce 1.4s ease-in-out infinite 0.2s;"></div>
+                        <div style="width: 8px; height: 8px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 50%; animation: dot-bounce 1.4s ease-in-out infinite 0.4s;"></div>
+                    </div>
+                    
+                    <p style="
+                        font-size: 14px;
+                        color: var(--text-secondary);
+                        margin: 0;
+                        font-weight: 500;
+                    ">This may take a few moments</p>
+                </div>
+                
+                <!-- Progress bar -->
+                <div style="
+                    width: 200px;
+                    height: 4px;
+                    background: rgba(99, 102, 241, 0.1);
+                    border-radius: 2px;
+                    overflow: hidden;
+                    position: relative;
+                    z-index: 1;
+                ">
+                    <div style="
+                        width: 100%;
+                        height: 100%;
+                        background: linear-gradient(90deg, #6366f1, #a855f7, #6366f1);
+                        background-size: 200% 100%;
+                        animation: shimmer 2s linear infinite;
+                    "></div>
+                </div>
+            </div>
+            
+            <style>
+                @keyframes pulse-ring {
+                    0%, 100% {
+                        box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3), 0 0 0 0 rgba(99, 102, 241, 0.4);
+                    }
+                    50% {
+                        box-shadow: 0 8px 32px rgba(99, 102, 241, 0.4), 0 0 0 20px rgba(99, 102, 241, 0);
+                    }
+                }
+                
+                @keyframes bounce-subtle {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-8px); }
+                }
+                
+                @keyframes rotate {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                
+                @keyframes float {
+                    0%, 100% { transform: translateY(0); opacity: 0.3; }
+                    50% { transform: translateY(-20px); opacity: 0.8; }
+                }
+                
+                @keyframes dot-bounce {
+                    0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+                    40% { transform: scale(1); opacity: 1; }
+                }
+                
+                @keyframes shimmer {
+                    0% { background-position: -200% 0; }
+                    100% { background-position: 200% 0; }
+                }
+            </style>
+        `;
+    }
 
     try {
         const summaryText = call.summary || '';
@@ -3963,10 +4582,20 @@ async function translateSummary(callId, language, event) {
             updateSummaryWithTranslation(callId, result.translated_text, language);
             showToast(`Translated to ${getLanguageName(language)}!`, 'success');
         } else {
-            throw new Error('Translation error');
+            // Restore original content on error
+            const call = allCalls.find(c => c.id === callId);
+            if (call) {
+                openModal(callId); // Refresh modal to show original content
+            }
+            showToast('Translation failed. Please try again.', 'error');
         }
     } catch (error) {
         console.error('Translation error:', error);
+        // Restore original content on error
+        const call = allCalls.find(c => c.id === callId);
+        if (call) {
+            openModal(callId); // Refresh modal to show original content
+        }
         showToast('Translation failed. Please try again.', 'error');
     }
 }
@@ -3979,12 +4608,7 @@ function updateSummaryWithTranslation(callId, translatedText, language) {
     const ui = getUITranslations(language);
 
     // Parse translated text as JSON if possible
-    let translatedData = null;
-    try {
-        translatedData = JSON.parse(translatedText);
-    } catch (e) {
-        // Not JSON, use as plain text
-    }
+    const translatedData = tryParseJSON(translatedText);
 
     const modalSummary = document.getElementById('modal-summary');
     if (!modalSummary) return;
@@ -4141,44 +4765,100 @@ document.addEventListener('click', (e) => {
 // Theme Toggle Logic
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-    const headerThemeBtn = document.getElementById('header-theme-toggle');
+    const themeCheckbox = document.getElementById('theme-toggle-checkbox');
     const savedTheme = localStorage.getItem('theme') || 'light';
 
     // Initial set
     setTheme(savedTheme);
 
-    if (headerThemeBtn) {
-        headerThemeBtn.addEventListener('click', () => {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            setTheme(newTheme);
+    if (themeCheckbox) {
+        themeCheckbox.addEventListener('change', () => {
+            const newTheme = themeCheckbox.checked ? 'dark' : 'light';
+            setTheme(newTheme, true);
         });
     }
 
-    function setTheme(theme) {
+    function setTheme(theme, forceReload = false) {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
 
-        // Update icon
-        if (headerThemeBtn) {
-            const icon = headerThemeBtn.querySelector('i');
-            if (icon) {
-                if (theme === 'dark') {
-                    icon.className = 'fa-solid fa-sun';
-                } else {
-                    icon.className = 'fa-solid fa-moon';
-                }
+        // Update checkbox state
+        if (themeCheckbox) {
+            themeCheckbox.checked = (theme === 'dark');
+        }
+
+        // Re-initialize charts with new theme colors
+        if (typeof initializeSentimentChart === 'function') {
+            initializeSentimentChart();
+        }
+        if (typeof initializeCategoriesChart === 'function') {
+            initializeCategoriesChart();
+        }
+
+        // Update Vapi Widget Theme if it exists
+        const oldWidget = document.querySelector('vapi-widget');
+        if (oldWidget) {
+            // Set attributes on the existing widget (or the one to be cloned)
+            oldWidget.setAttribute('theme', theme);
+            if (theme === 'dark') {
+                oldWidget.setAttribute('button-base-color', '#6366f1');
+                oldWidget.setAttribute('base-color', '#0f172a');
+                oldWidget.setAttribute('accent-color', '#818cf8');
+            } else {
+                oldWidget.setAttribute('button-base-color', '#3F0067');
+                oldWidget.setAttribute('base-color', '#ffffff');
+                oldWidget.setAttribute('accent-color', '#9344B3');
+            }
+
+            // Force reload widget if requested (user toggle) to ensure re-render
+            if (forceReload && window.initializeVapiEvents) {
+                console.log('[Theme] Force reloading Vapi widget for theme change...');
+                const newWidget = oldWidget.cloneNode(true);
+                oldWidget.parentNode.replaceChild(newWidget, oldWidget);
+                window.initializeVapiEvents(newWidget);
             }
         }
     }
 });
 
 // ============================================
+// Profile Dropdown Toggle
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+    const profileTrigger = document.getElementById('profile-trigger');
+    const profileDropdown = document.getElementById('profile-dropdown');
+
+    if (profileTrigger && profileDropdown) {
+        profileTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            profileDropdown.classList.toggle('active');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!profileTrigger.contains(e.target) && !profileDropdown.contains(e.target)) {
+                profileDropdown.classList.remove('active');
+            }
+        });
+
+        // Close dropdown when clicking inside (e.g., logout button)
+        profileDropdown.addEventListener('click', () => {
+            profileDropdown.classList.remove('active');
+        });
+    }
+});
+
+// ============================================
 // Search Functionality
 // ============================================
+
 function setupSearchListener() {
     const searchInput = document.getElementById('call-search-input');
     if (searchInput) {
+        // Clear value on load
+        searchInput.value = '';
+        currentSearchTerm = '';
+
         searchInput.addEventListener('input', (e) => {
             currentSearchTerm = e.target.value.trim().toLowerCase();
             applyFilters();

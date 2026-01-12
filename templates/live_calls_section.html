@@ -1,0 +1,38 @@
+<!-- Live Calls Section -->
+<section class="table-section section-hidden" id="live-calls-section" style="display: none;">
+    <div class="section-header">
+        <h2>Live Active Calls</h2>
+        <div class="table-controls">
+            <div class="live-indicator-badge pulse">
+                <i class="fa-solid fa-circle"></i> Live Updates
+            </div>
+            <button class="refresh-btn" id="refresh-live-calls">
+                <i class="fa-solid fa-rotate"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="table-card">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th width="15%">Status</th>
+                        <th width="25%">Call ID</th>
+                        <th width="40%">Started At</th>
+                        <th width="20%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="live-calls-table-body">
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <div class="loading-spinner" style="margin: 0 auto 10px;"></div>
+                            <p>Connecting to real-time feed...</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

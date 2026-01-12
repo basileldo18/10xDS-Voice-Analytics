@@ -1,126 +1,168 @@
 /* ============================================
-   Minutes Translation Button & Dropdown
+   Translation Tab Styling
    ============================================ */
 
-.minutes-header {
+/* Container Setup */
+#tab-translation .translation-controls {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
+    gap: 12px;
+    margin-bottom: 24px;
+    align-items: stretch;
+    background: var(--bg-secondary);
+    padding: 6px;
+    border-radius: 16px;
+    border: 1px solid var(--border-light);
+    width: fit-content;
 }
 
-.minutes-translate-dropdown {
-    position: relative;
-}
-
-.minutes-translate-btn {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%);
-    backdrop-filter: blur(10px);
-    border: 1.5px solid rgba(99, 102, 241, 0.25);
-    color: var(--accent-primary);
-    padding: 8px 16px;
-    border-radius: var(--radius-lg);
-    font-weight: 600;
-    font-size: 0.875rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    transition: all var(--transition-base);
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
-}
-
-.minutes-translate-btn i:first-child {
-    font-size: 16px;
-}
-
-.minutes-translate-btn i:last-child {
-    font-size: 12px;
-    transition: transform 0.3s ease;
-}
-
-.minutes-translate-btn:hover {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%);
-    border-color: rgba(99, 102, 241, 0.4);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
-}
-
-.minutes-translate-dropdown:hover .minutes-translate-btn i:last-child {
-    transform: rotate(180deg);
-}
-
-.minutes-translate-menu {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    min-width: 180px;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    padding: 8px;
-    display: none;
-    flex-direction: column;
-    gap: 4px;
-    z-index: 1000;
-    animation: dropdownSlideIn 0.2s ease-out;
-}
-
-.minutes-translate-menu.active {
-    display: flex;
-}
-
-@keyframes dropdownSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.translate-option {
-    background: transparent;
+/* Dropdown Styling */
+#tab-translation #translation-language {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-color: transparent;
     border: none;
-    padding: 10px 14px;
-    border-radius: var(--radius-md);
-    font-size: 0.9rem;
+    padding: 10px 40px 10px 16px;
+    font-size: 0.95rem;
     font-weight: 500;
     color: var(--text-primary);
     cursor: pointer;
+    min-width: 150px;
+    outline: none;
+    border-radius: 12px;
+
+    /* Custom Arrow */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 12px center !important;
+    background-size: 16px !important;
+    transition: all 0.2s ease;
+}
+
+/* Hover State for Dropdown */
+#tab-translation #translation-language:hover {
+    background-color: rgba(99, 102, 241, 0.05);
+}
+
+/* Dark Mode Arrow */
+[data-theme="dark"] #tab-translation #translation-language {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
+/* Translate Button Styling */
+#tab-translation #translate-btn {
     display: flex;
     align-items: center;
-    gap: 10px;
-    transition: all 0.2s ease;
-    text-align: left;
-    width: 100%;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-dark) 100%);
+    color: white;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.translate-option:hover {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.05) 100%);
-    color: var(--accent-primary);
+#tab-translation #translate-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
 }
 
-.lang-flag {
-    font-size: 1.2rem;
-    line-height: 1;
+#tab-translation #translate-btn:active {
+    transform: translateY(0);
 }
 
-/* Responsive */
+#tab-translation #translate-btn i {
+    font-size: 1rem;
+}
+
+/* Output Area Styling */
+#modal-translation {
+    margin-top: 16px;
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-light);
+    min-height: 120px;
+}
+
+/* Placeholder Text */
+.translation-placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    margin-top: 20px;
+}
+
+/* Responsive Adjustments */
 @media (max-width: 640px) {
-    .minutes-header {
+    #tab-translation .translation-controls {
         flex-direction: column;
-        align-items: flex-start;
-        gap: 12px;
+        width: 100%;
+        gap: 8px;
+        padding: 8px;
     }
 
-    .minutes-translate-menu {
-        right: auto;
-        left: 0;
+    #tab-translation #translation-language {
+        width: 100%;
+        background-position: right 16px center;
     }
+
+    #tab-translation #translate-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ============================================
+   Dark Mode Visibility Enhancements
+   (Transcription & Translation)
+   ============================================ */
+
+[data-theme="dark"] .utterance-text {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    /* Boost contrast */
+}
+
+[data-theme="dark"] .speaker-label {
+    color: #818cf8 !important;
+    /* Brighter accent color */
+    font-weight: 700;
+}
+
+[data-theme="dark"] .utterance-timestamp {
+    color: #cbd5e1 !important;
+    background: rgba(15, 23, 42, 0.8);
+}
+
+/* Ensure background of the transcript/translation boxes provides good contrast */
+[data-theme="dark"] .content-box,
+[data-theme="dark"] .transcript-box,
+[data-theme="dark"] .translated-transcript,
+[data-theme="dark"] #modal-translation {
+    background: rgba(2, 6, 23, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff;
+}
+
+[data-theme="dark"] .utterance-line {
+    background: rgba(30, 41, 59, 0.4) !important;
+    border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme="dark"] .utterance-line:hover {
+    background: rgba(30, 41, 59, 0.7) !important;
+}
+
+/* Fix Focus State in Dark Mode (prevent white background) */
+[data-theme="dark"] .utterance-text:focus,
+[data-theme="dark"] .speaker-label:focus {
+    background: rgba(30, 41, 59, 0.8) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.5) !important;
+    outline: none !important;
 }

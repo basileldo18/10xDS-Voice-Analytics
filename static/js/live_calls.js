@@ -4,11 +4,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshBtn = document.getElementById('refresh-live-calls');
     const liveModal = document.getElementById('live-transcript-modal');
     const modalCloseBtn = document.getElementById('close-live-modal');
+    const modalCloseBtnTop = document.getElementById('close-live-modal-top');
     const liveTranscriptContainer = document.getElementById('live-transcript-container');
     const connectionStatus = document.getElementById('live-connection-status');
 
     let activeSubscription = null;
     let currentCallId = null;
+    let lastRole = null; // Track last role to group messages
 
     // --- Sidebar Navigation for Live Calls ---
     const liveNavLink = document.getElementById('nav-live-calls');
@@ -26,62 +28,67 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modalCloseBtn) {
         modalCloseBtn.addEventListener('click', () => window.closeLiveModal());
     }
+    if (modalCloseBtnTop) {
+        modalCloseBtnTop.addEventListener('click', () => window.closeLiveModal());
+    }
 
     // --- Fetch Live Calls ---
     window.fetchLiveCalls = async function () {
         if (!window.appSupabase) return;
 
         try {
-            liveCallsTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+            console.log('[Live] Fetching calls...');
 
-            // Fetch calls that are not 'ended'
-            // Added secondary safety check: Only show calls from the last 12 hours to avoid "stuck" calls
-            const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
-
+            // Fetch ONLY active calls (in-progress or started)
             const { data, error } = await window.appSupabase
                 .from('vapi_calls')
                 .select('*')
-                .neq('status', 'ended')
-                .gt('created_at', twelveHoursAgo)
-                .order('created_at', { ascending: false })
-                .limit(20);
+                .in('status', ['in-progress', 'started'])
+                .order('created_at', { ascending: false });
 
-            if (error) throw error;
+            if (error) {
+                console.error('[Live] Supabase error:', error);
+                throw error;
+            }
 
             liveCallsTableBody.innerHTML = '';
 
             if (!data || data.length === 0) {
-                liveCallsTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No active calls found.</td></tr>';
+                liveCallsTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No active live calls at the moment.</td></tr>';
                 return;
             }
 
+            console.log(`[Live] Found ${data.length} calls.`);
+
             data.forEach(call => {
-                // Filter out stale records: If a call is 'in-progress' but hasn't been updated in 30 minutes, it's likely stuck.
-                const lastUpdate = new Date(call.updated_at || call.created_at);
-                const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
-
-                if (call.status === 'in-progress' && lastUpdate < thirtyMinsAgo) {
-                    console.log(`[Live] Hiding stale call: ${call.call_id}`);
-                    return;
-                }
-
                 const row = document.createElement('tr');
-                // Only show as 'Live' if status is specifically 'in-progress'
+
                 const isLive = call.status === 'in-progress' || call.status === 'started';
-                const statusColor = isLive ? '#22c55e' : '#64748b';
-                const statusLabel = isLive ? 'Live' : (call.status.charAt(0).toUpperCase() + call.status.slice(1));
+                const isEnded = call.status === 'ended';
+
+                let statusColor = '#64748b'; // Default gray
+                let statusLabel = (call.status || 'Unknown').charAt(0).toUpperCase() + (call.status || 'unknown').slice(1);
+                let badgeClass = '';
+
+                if (isLive) {
+                    statusColor = '#22c55e'; // Green
+                    statusLabel = 'Live';
+                    badgeClass = 'pulse';
+                } else if (isEnded) {
+                    statusColor = '#94a3b8'; // Lighter gray
+                }
 
                 row.innerHTML = `
                     <td>
                         <span style="display:inline-flex; align-items:center; gap:5px; font-weight:600; color:${statusColor};">
-                            <i class="fa-solid fa-circle ${isLive ? 'pulse' : ''}" style="font-size:8px;"></i> ${statusLabel}
+                            <i class="fa-solid fa-circle ${badgeClass}" style="font-size:8px;"></i> ${statusLabel}
                         </span>
                     </td>
                     <td>${call.call_id ? call.call_id.substring(0, 8) + '...' : 'Unknown'}</td>
                     <td>${new Date(call.created_at).toLocaleString()}</td>
                     <td>
                         <button class="btn-action view-live-btn" data-id="${call.call_id}">
-                            <i class="fa-solid fa-eye"></i> Live View
+                            <i class="fa-solid ${isLive ? 'fa-eye' : 'fa-list-alt'}"></i> ${isLive ? 'Live View' : 'Transcript'}
                         </button>
                     </td>
                 `;
@@ -89,7 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Make the entire row clickable
                 row.style.cursor = 'pointer';
                 row.addEventListener('click', (e) => {
-                    // Prevent double-trigger if the button itself was clicked (since it has its own listener)
                     if (e.target.closest('.view-live-btn')) return;
                     openLiveModal(call.call_id);
                 });
@@ -104,7 +110,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             console.error('Error fetching live calls:', err);
-            liveCallsTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">Error: ${err.message}</td></tr>`;
+            if (liveCallsTableBody) {
+                liveCallsTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">Error: ${err.message}</td></tr>`;
+            }
         }
     }
 
@@ -120,14 +128,25 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.style.overflow = 'hidden';
 
         // Update Header Info
-        const callIdDisplay = document.getElementById('live-call-id');
-        if (callIdDisplay) callIdDisplay.textContent = callId.substring(0, 8) + '...';
+        // Removed call ID display from header since it's not in the new UI design
+
+        // Update Date
+        const dateDisplay = document.getElementById('live-chat-date');
+        if (dateDisplay) {
+            const now = new Date();
+            const options = { day: 'numeric', month: 'long', year: 'numeric' };
+            dateDisplay.textContent = now.toLocaleDateString('en-GB', options);
+        }
 
         // Reset Status
         connectionStatus.textContent = 'Connecting...';
+        lastRole = null;
 
         // Clear previous content and show loading
         liveTranscriptContainer.innerHTML = `
+            <div class="chat-date-separator">
+                <span class="chat-date-text" id="live-chat-date">Today</span>
+            </div>
             <div class="empty-state">
                 <div class="loader-spinner" style="border-top-color:#9344B3; width:30px; height:30px;"></div>
                 <p>Connecting to live stream...</p>
@@ -160,10 +179,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const copyBtn = document.getElementById('copy-live-btn');
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {
-            const text = Array.from(liveTranscriptContainer.querySelectorAll('.msg-text'))
+            const text = Array.from(liveTranscriptContainer.querySelectorAll('.chat-msg-row'))
                 .map(el => {
-                    const role = el.parentElement.querySelector('.msg-meta').textContent.trim();
-                    return `${role}: ${el.textContent.trim()}`;
+                    const role = el.classList.contains('sent') ? 'User' : 'Assistant';
+                    const content = el.querySelector('.msg-bubble').textContent.trim();
+                    return `${role}: ${content}`;
                 })
                 .join('\n\n');
 
@@ -278,48 +298,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const existingNode = document.getElementById(`msg-${t.id}`);
 
         if (existingNode) {
-            // Update existing
-            existingNode.querySelector('.msg-text').textContent = t.transcript;
+            // Update existing text
+            const textEl = existingNode.querySelector('.msg-bubble');
+            if (textEl) textEl.textContent = t.transcript;
             return;
         }
 
         // Create new
         const isUser = t.role === 'user';
+        const roleName = isUser ? 'User' : 'Assistant';
 
-        // Use classes for styling instead of inline styles
+        // Avatars matching design
+        const userAvatar = "https://ui-avatars.com/api/?name=User&background=000000&color=fff";
+        const assistantAvatar = "https://ui-avatars.com/api/?name=AS&background=dcd7ff&color=581c87";
+        const avatarSrc = isUser ? userAvatar : assistantAvatar;
+
         const div = document.createElement('div');
         div.id = `msg-${t.id}`;
-        div.className = `transcript-row ${isUser ? 'user-row' : 'assistant-row'}`;
+        div.className = `chat-msg-row ${isUser ? 'sent' : 'received'}`;
 
-        // Inline layout styles as fallback/ensurance (matching main style.css logic if classes aren't enough)
-        div.style.display = 'flex';
-        div.style.flexDirection = 'column';
-        div.style.alignItems = isUser ? 'flex-end' : 'flex-start';
-        div.style.marginBottom = '16px';
-
-        // Message Bubble Style
-        const bubbleBg = isUser ? 'linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%)' : '#ffffff';
-        const bubbleColor = isUser ? '#581c87' : '#1e293b';
-        const bubbleBorder = isUser ? 'none' : '1px solid #e2e8f0';
-        const bubbleRadius = isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px';
+        // Grouping logic (simplified)
+        if (lastRole === t.role) {
+            div.classList.add('group-mid');
+        }
+        lastRole = t.role;
 
         div.innerHTML = `
-            <div class="msg-meta" style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px; padding: 0 4px;">
-                ${t.role === 'user' ? 'User' : 'Assistant'}
-            </div>
-            <div class="msg-text" style="
-                padding: 12px 16px; 
-                max-width: 85%; 
-                background: ${bubbleBg}; 
-                color: ${bubbleColor}; 
-                border-radius: ${bubbleRadius}; 
-                border: ${bubbleBorder};
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                line-height: 1.5;
-                font-size: 0.95rem;">
-                ${t.transcript}
+            <img src="${avatarSrc}" class="msg-avatar" alt="${roleName}">
+            <div class="msg-content">
+                <div class="msg-meta">${roleName}</div>
+                <div class="msg-bubble">
+                    ${t.transcript}
+                </div>
             </div>
         `;
+
         liveTranscriptContainer.appendChild(div);
     }
 
@@ -364,10 +377,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const lastUpdate = new Date(newCall.updated_at || newCall.created_at);
         const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
 
-        if (isLive && lastUpdate < thirtyMinsAgo) {
-            console.log(`[Live] Ignoring stale update: ${newCall.call_id}`);
-            if (row) row.remove();
-            return;
+        if (isLive) {
+            console.log(`[Live] Received active call: ${newCall.call_id}, Last Update: ${lastUpdate}`);
+            // Removed strict stale check to ensure visibility
         }
 
         const statusColor = isLive ? '#22c55e' : '#64748b';

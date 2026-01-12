@@ -77,6 +77,11 @@
     animation: dropdownSlideIn 0.2s ease-out;
 }
 
+[data-theme="dark"] .summary-translate-menu {
+    background: rgba(15, 23, 42, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
 .summary-translate-menu.active {
     display: flex;
 }
