@@ -2165,11 +2165,26 @@ window.openModal = async function (callId) {
         let detectedSpeakers = {};
         try {
             const sData = typeof call.summary === 'string' ? JSON.parse(call.summary) : call.summary;
-            detectedSpeakers = sData.detected_speakers || {};
+            let speakersData = sData.detected_speakers || {};
             if (sData.summary && sData.summary.detected_speakers) {
-                detectedSpeakers = sData.summary.detected_speakers;
+                speakersData = sData.summary.detected_speakers;
             }
-        } catch (e) { }
+
+            // Handle both array and object formats
+            if (Array.isArray(speakersData)) {
+                // Convert array ['Paula Heberling', 'Agent'] to object {'Speaker 1': 'Paula Heberling', 'Speaker 2': 'Agent'}
+                speakersData.forEach((name, index) => {
+                    if (name && name.trim()) {
+                        detectedSpeakers[`Speaker ${index + 1}`] = name.trim();
+                    }
+                });
+            } else if (typeof speakersData === 'object') {
+                // Already in correct format
+                detectedSpeakers = speakersData;
+            }
+        } catch (e) {
+            console.error('[SPEAKER DETECTION] Error parsing speakers:', e);
+        }
 
         // Show speaker count badge next to filename
         const speakerBadge = document.getElementById('speaker-badge-display');
@@ -2195,24 +2210,28 @@ window.openModal = async function (callId) {
             diarizationData.forEach((utterance, idx) => {
                 const originalSpeaker = utterance.speaker || 'Unknown';
 
-                // Use saved display_name if available, otherwise map to Speaker N format
+                // Simple logic: Use display_name if manually edited, otherwise use detected name, otherwise use Speaker N
                 let displaySpeaker;
                 if (utterance.display_name) {
+                    // User has manually edited this speaker's name
                     displaySpeaker = utterance.display_name;
                 } else {
-                    // Map original speaker ID to Speaker N format
+                    // First time seeing this speaker - assign Speaker N
                     if (!speakerMap[originalSpeaker]) {
                         speakerMap[originalSpeaker] = `Speaker ${speakerIndex}`;
                         speakerIndex++;
                     }
                     const mappedSpeaker = speakerMap[originalSpeaker];
-                    // If we have an LLM-detected identity for this label, use it
-                    displaySpeaker = detectedSpeakers[mappedSpeaker] || mappedSpeaker;
-                }
 
-                // Safety: only show name part if LLM included role info after comma
-                if (typeof displaySpeaker === 'string' && displaySpeaker.includes(',')) {
-                    displaySpeaker = displaySpeaker.split(',')[0].trim();
+                    // Check if LLM detected a name for this speaker
+                    const detectedName = detectedSpeakers[mappedSpeaker];
+                    if (detectedName && typeof detectedName === 'string') {
+                        // Extract only the name part (before any comma)
+                        displaySpeaker = detectedName.split(',')[0].trim();
+                    } else {
+                        // No detected name, use Speaker N
+                        displaySpeaker = mappedSpeaker;
+                    }
                 }
 
                 const timestamp = formatTimestamp(utterance.start);
@@ -2716,7 +2735,7 @@ window.openModal = async function (callId) {
     tabContents.forEach((c, i) => c.classList.toggle('active', i === 0));
 
     // Setup copy button
-    setupCopyButton(call.transcript);
+    setupCopyButton(call);
 
     // Setup translation button
     setupTranslationButton(call);
@@ -2784,11 +2803,26 @@ function setupTranslationButton(call) {
                         let detectedSpeakers = {};
                         try {
                             const sData = typeof call.summary === 'string' ? JSON.parse(call.summary) : call.summary;
-                            detectedSpeakers = sData.detected_speakers || {};
+                            let speakersData = sData.detected_speakers || {};
                             if (sData.summary && sData.summary.detected_speakers) {
-                                detectedSpeakers = sData.summary.detected_speakers;
+                                speakersData = sData.summary.detected_speakers;
                             }
-                        } catch (e) { }
+
+                            // Handle both array and object formats
+                            if (Array.isArray(speakersData)) {
+                                // Convert array ['Paula Heberling', 'Agent'] to object {'Speaker 1': 'Paula Heberling', 'Speaker 2': 'Agent'}
+                                speakersData.forEach((name, index) => {
+                                    if (name && name.trim()) {
+                                        detectedSpeakers[`Speaker ${index + 1}`] = name.trim();
+                                    }
+                                });
+                            } else if (typeof speakersData === 'object') {
+                                // Already in correct format
+                                detectedSpeakers = speakersData;
+                            }
+                        } catch (e) {
+                            console.error('[SPEAKER DETECTION] Error parsing speakers:', e);
+                        }
 
                         // First pass: build map from original diarization (which has display_name from edits)
                         if (call.diarization_data && call.diarization_data.length > 0) {
@@ -2817,13 +2851,12 @@ function setupTranslationButton(call) {
                             let displaySpeaker = speakerNameMap[originalSpeaker];
                             if (!displaySpeaker) {
                                 displaySpeaker = utterance.display_name || `Speaker ${speakerIndex}`;
+                                // Extract only name part (before comma) if LLM added role info
+                                if (typeof displaySpeaker === 'string' && displaySpeaker.includes(',')) {
+                                    displaySpeaker = displaySpeaker.split(',')[0].trim();
+                                }
                                 speakerNameMap[originalSpeaker] = displaySpeaker;
                                 speakerIndex++;
-                            }
-
-                            // Safety: only show name part if LLM included role info after comma
-                            if (typeof displaySpeaker === 'string' && displaySpeaker.includes(',')) {
-                                displaySpeaker = displaySpeaker.split(',')[0].trim();
                             }
 
                             const timestamp = formatTimestamp(utterance.start);
@@ -3153,12 +3186,104 @@ function setupSpeakerEditListeners(callId, diarizationData) {
     });
 }
 
-function setupCopyButton(transcript) {
+function setupCopyButton(call) {
     const copyBtn = document.getElementById('copy-transcript-btn');
 
     if (copyBtn) {
         copyBtn.onclick = () => {
-            navigator.clipboard.writeText(transcript || '')
+            let textToCopy = '';
+
+            // Try to get structured transcript from the displayed DOM (most reliable)
+            const modalText = document.getElementById('modal-text');
+            const diarizedTranscript = modalText?.querySelector('.diarized-transcript');
+
+            if (diarizedTranscript) {
+                // Extract from the rendered transcript display
+                const utteranceLines = diarizedTranscript.querySelectorAll('.utterance-line');
+
+                utteranceLines.forEach(line => {
+                    const timestamp = line.querySelector('.utterance-timestamp')?.textContent?.trim() || '';
+                    const speaker = line.querySelector('.speaker-label')?.textContent?.trim() || '';
+                    const text = line.querySelector('.utterance-text')?.textContent?.trim() || '';
+
+                    // Format: [MM:SS] Speaker Name: Text
+                    textToCopy += `${timestamp} ${speaker}: ${text}\n`;
+                });
+            } else {
+                // Fallback: Try to use diarization data from call object
+                if (call.diarization_data && call.diarization_data.length > 0) {
+                    const diarizationData = call.diarization_data;
+
+                    // Build speaker map (same logic as display)
+                    const speakerMap = {};
+                    let speakerIndex = 1;
+
+                    // Try to get speaker identification from summary
+                    let detectedSpeakers = {};
+                    try {
+                        const sData = typeof call.summary === 'string' ? JSON.parse(call.summary) : call.summary;
+                        let speakersData = sData.detected_speakers || {};
+                        if (sData.summary && sData.summary.detected_speakers) {
+                            speakersData = sData.summary.detected_speakers;
+                        }
+
+                        // Handle both array and object formats
+                        if (Array.isArray(speakersData)) {
+                            // Convert array ['Paula Heberling', 'Agent'] to object {'Speaker 1': 'Paula Heberling', 'Speaker 2': 'Agent'}
+                            speakersData.forEach((name, index) => {
+                                if (name && name.trim()) {
+                                    detectedSpeakers[`Speaker ${index + 1}`] = name.trim();
+                                }
+                            });
+                        } else if (typeof speakersData === 'object') {
+                            // Already in correct format
+                            detectedSpeakers = speakersData;
+                        }
+                    } catch (e) {
+                        console.error('[SPEAKER DETECTION] Error parsing speakers:', e);
+                    }
+
+                    // Format each utterance
+                    diarizationData.forEach((utterance) => {
+                        const originalSpeaker = utterance.speaker || 'Unknown';
+
+                        // Simple logic: Use display_name if manually edited, otherwise use detected name, otherwise use Speaker N
+                        let displaySpeaker;
+                        if (utterance.display_name) {
+                            // User has manually edited this speaker's name
+                            displaySpeaker = utterance.display_name;
+                        } else {
+                            // First time seeing this speaker - assign Speaker N
+                            if (!speakerMap[originalSpeaker]) {
+                                speakerMap[originalSpeaker] = `Speaker ${speakerIndex}`;
+                                speakerIndex++;
+                            }
+                            const mappedSpeaker = speakerMap[originalSpeaker];
+
+                            // Check if LLM detected a name for this speaker
+                            const detectedName = detectedSpeakers[mappedSpeaker];
+                            if (detectedName && typeof detectedName === 'string') {
+                                // Extract only the name part (before any comma)
+                                displaySpeaker = detectedName.split(',')[0].trim();
+                            } else {
+                                // No detected name, use Speaker N
+                                displaySpeaker = mappedSpeaker;
+                            }
+                        }
+
+                        const timestamp = formatTimestamp(utterance.start);
+                        const text = utterance.text || '';
+
+                        // Format: [MM:SS] Speaker Name: Text
+                        textToCopy += `[${timestamp}] ${displaySpeaker}: ${text}\n`;
+                    });
+                } else {
+                    // Last resort: plain transcript
+                    textToCopy = call.transcript || '';
+                }
+            }
+
+            navigator.clipboard.writeText(textToCopy)
                 .then(() => showToast('Transcript copied to clipboard', 'success'))
                 .catch(() => showToast('Failed to copy transcript', 'error'));
         };

@@ -1879,8 +1879,31 @@ async def delete_call(req: DeleteCallRequest):
         auth = temp_sb.auth.sign_in_with_password({"email": "admin@10xds.com", "password": req.password})
         if not auth.user: return JSONResponse(status_code=401, content={"error": "Invalid admin password"})
         
+        # First, get the call data to retrieve the filename
+        call_data = supabase.table('calls').select("filename, audio_url").eq('id', req.call_id).execute()
+        if not call_data.data or len(call_data.data) == 0:
+            return JSONResponse(status_code=404, content={"error": "Call not found"})
+        
+        filename = call_data.data[0].get('filename')
+        audio_url = call_data.data[0].get('audio_url')
+        
+        # Delete from database
         res = supabase.table('calls').delete().eq('id', req.call_id).execute()
-        if len(res.data) == 0: return JSONResponse(status_code=404, content={"error": "Call not found"})
+        
+        # Delete audio file from Supabase storage if it exists
+        if filename:
+            try:
+                # Try to delete from the 'audio-files' bucket (common bucket name)
+                # Adjust bucket name if your setup uses a different name
+                bucket_name = "audio-files"
+                supabase.storage.from_(bucket_name).remove([filename])
+                print(f"[DELETE] Successfully deleted audio file from storage: {filename}")
+            except Exception as storage_error:
+                # Log the error but don't fail the delete operation
+                # The database record is already deleted at this point
+                print(f"[DELETE] Warning: Could not delete audio file from storage: {storage_error}")
+                # Continue with success response since DB deletion succeeded
+        
         return {"success": True, "message": "Call deleted"}
     except Exception as e:
         if "Invalid login credentials" in str(e): return JSONResponse(status_code=401, content={"error": "Invalid admin password"})
