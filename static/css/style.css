@@ -6112,38 +6112,36 @@ select option {
     position: relative;
 }
 
-/* Close Icon Button - Glassmorphic */
+/* Close Icon Button - Glassmorphic (Inside) */
 .admin-close-icon {
     position: absolute;
-    top: -50px;
-    right: 0;
-    width: 40px;
-    height: 40px;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
-    color: var(--text-secondary);
-    font-size: 18px;
+    color: #ffffff;
+    font-size: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: var(--shadow-md);
-    z-index: 10;
+    transition: all 0.2s ease;
+    z-index: 20;
 }
 
 .admin-close-icon:hover {
-    background: rgba(239, 68, 68, 0.95);
-    color: #ffffff;
-    transform: rotate(90deg) scale(1.05);
-    box-shadow: var(--shadow-lg);
-    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(255, 255, 255, 0.35);
+    transform: rotate(90deg);
 }
 
 /* Main Modal Card - Glassmorphic */
 .admin-modal-card {
+    position: relative;
+    /* Context for absolute close button */
     background: rgba(255, 255, 255, 0.75);
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.5);
@@ -6522,39 +6520,35 @@ select option {
 
 /* Summary Modal Wrapper */
 .summary-modal-wrapper {
-    max-width: 800px;
+    max-width: 600px;
     width: 94%;
     position: relative;
 }
 
-/* Close Button */
+/* Close Button (Inside) */
 .summary-close-icon {
     position: absolute;
-    top: -50px;
-    right: 0;
-    width: 40px;
-    height: 40px;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
-    color: var(--text-secondary);
-    font-size: 18px;
+    color: #ffffff;
+    font-size: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: var(--shadow-md);
-    z-index: 10;
+    transition: all 0.2s ease;
+    z-index: 20;
 }
 
 .summary-close-icon:hover {
-    background: rgba(99, 102, 241, 0.95);
-    color: #ffffff;
-    transform: rotate(90deg) scale(1.05);
-    box-shadow: var(--shadow-lg);
-    border-color: rgba(99, 102, 241, 0.3);
+    background: rgba(255, 255, 255, 0.35);
+    transform: rotate(90deg);
 }
 
 /* Summary Modal Card */
@@ -6564,15 +6558,16 @@ select option {
     border: 1px solid rgba(255, 255, 255, 0.5);
     border-radius: var(--radius-2xl);
     overflow: hidden;
-    box-shadow: var(--shadow-xl),
-        0 0 0 1px rgba(255, 255, 255, 0.6);
+    position: relative;
+    /* Context for absolute close button */
+    box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255, 255, 255, 0.6);
     animation: modalGlassEnter 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 /* Summary Header */
 .summary-modal-header {
     background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
-    padding: 36px 32px 32px;
+    padding: 24px 20px;
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -6592,38 +6587,37 @@ select option {
 }
 
 .summary-icon {
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 18px;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
-    border-radius: var(--radius-xl);
+    border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 38px;
+    font-size: 26px;
     color: var(--accent-primary);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15),
-        0 0 0 3px rgba(255, 255, 255, 0.4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     animation: iconGlassFloat 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     position: relative;
     z-index: 1;
 }
 
 .summary-modal-title {
-    font-size: 1.65rem;
-    font-weight: 800;
+    font-size: 1.25rem;
+    font-weight: 700;
     color: #ffffff;
-    margin: 0 0 8px 0;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    letter-spacing: -0.02em;
+    margin: 0 0 6px 0;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    letter-spacing: -0.01em;
     position: relative;
     z-index: 1;
 }
 
 .summary-modal-subtitle {
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.85);
     margin: 0;
     font-weight: 500;
     position: relative;
@@ -6655,7 +6649,7 @@ select option {
 
 /* Summary Footer */
 .summary-modal-footer {
-    padding: 24px 32px;
+    padding: 16px 20px;
     background: rgba(248, 250, 252, 0.6);
     backdrop-filter: blur(10px);
     display: grid;
@@ -6751,23 +6745,52 @@ select option {
 /* Responsive */
 @media (max-width: 640px) {
     .summary-modal-wrapper {
-        width: 95%;
+        width: 90%;
+        margin: 0 auto;
+    }
+
+    .summary-modal-header {
+        padding: 24px 20px;
+    }
+
+    .summary-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 28px;
+        margin-bottom: 12px;
+    }
+
+    .summary-modal-title {
+        font-size: 1.35rem;
+    }
+
+    .summary-modal-subtitle {
+        font-size: 0.85rem;
     }
 
     .summary-modal-body {
-        padding: 24px;
+        padding: 20px;
         max-height: 50vh;
     }
 
+    .summary-content-box {
+        padding: 16px;
+    }
+
     .summary-modal-footer {
-        padding: 20px 24px;
+        padding: 16px 20px;
         grid-template-columns: 1fr;
+        gap: 10px;
     }
 
     .summary-close-icon {
-        top: -45px;
-        width: 36px;
-        height: 36px;
+        top: -15px;
+        right: -15px;
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+        background: #ffffff;
+        color: #333;
     }
 }
 
