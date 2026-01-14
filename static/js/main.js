@@ -82,10 +82,10 @@ class NotificationService {
                 'start': { title: '🎙️ New Call', icon: 'fa-microphone', type: 'processing' },
                 'drive_import': { title: '📂 Google Drive', icon: 'fa-brands fa-google-drive', type: 'info' },
                 'download': { title: '⬇️ Downloading', icon: 'fa-download', type: 'processing' },
-                'upload': { title: '☁️ Uploading', icon: 'fa-cloud-upload-alt', type: 'processing' },
-                'analyze': { title: '🧠 Analyzing', icon: 'fa-brain', type: 'processing' },
-                'transcribe': { title: '📝 Transcribing', icon: 'fa-file-lines', type: 'processing' },
-                'save': { title: '💾 Saving', icon: 'fa-database', type: 'processing' },
+                'upload': { title: '☁️ Storage Upload', icon: 'fa-cloud-upload-alt', type: 'processing' },
+                'analyze': { title: '🧠 AI Analysis', icon: 'fa-brain', type: 'processing' },
+                'transcribe': { title: '📝 Transcription', icon: 'fa-file-lines', type: 'processing' },
+                'save': { title: '💾 Database', icon: 'fa-database', type: 'processing' },
                 'done': { title: '✅ Complete', icon: 'fa-check-circle', type: 'success' },
                 'error': { title: '❌ Error', icon: 'fa-exclamation-circle', type: 'error' }
             };
@@ -96,42 +96,43 @@ class NotificationService {
             let toastType = config.type;
             if (data.status === 'complete') toastType = 'success';
             if (data.status === 'error') toastType = 'error';
+            if (data.status === 'active') toastType = 'processing';
 
-            // Show toast for important steps
-            if (['start', 'drive_import', 'upload', 'done', 'error'].includes(data.step) || data.status === 'complete' || data.status === 'error') {
+            // Show toast for ALL important steps
+            // Show 'active' status for major steps and 'complete' for all steps
+            const shouldShowToast =
+                data.status === 'complete' ||  // Show all completion notifications
+                data.status === 'error' ||      // Show all errors
+                ['drive_import', 'transcribe', 'analyze', 'upload', 'save'].includes(data.step) && data.status === 'active'; // Show active for major steps
+
+            if (shouldShowToast) {
                 this.showToast(config.title, data.message, toastType, config.icon);
             }
 
-            // Refresh dashboard when processing is complete
-            if (data.step === 'done' && data.status === 'success') {
-                console.log('[NOTIFY] Analysis complete. Preparing to refresh dashboard...');
-
-                // Show completion notification
-                this.showToast('✅ Analysis Complete', 'Call has been analyzed successfully!', 'success', 'fa-check-circle');
-
-                // Show refreshing notification after a short delay
+            // Auto-refresh dashboard when save completes (before 'done' step)
+            // This ensures faster UI update
+            if (data.step === 'save' && data.status === 'complete') {
+                console.log('[NOTIFY] Save complete. Triggering dashboard refresh...');
                 setTimeout(async () => {
-                    this.showToast('🔄 Refreshing Dashboard', 'Please wait while we update the call list...', 'info', 'fa-sync');
-
-                    // Wait a moment for the notification to be visible
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-
-                    // Refresh and wait for completion
                     try {
                         if (typeof fetchCalls === 'function') {
-                            await fetchCalls(false);
+                            await fetchCalls(false, true); // Force refresh
                         }
                         if (typeof initializeSentimentChart === 'function') {
                             initializeSentimentChart();
                         }
-
-                        // Show refresh complete notification AFTER data is loaded
-                        this.showToast('✨ Dashboard Updated', 'New call data is now visible!', 'success', 'fa-sparkles');
+                        console.log('[NOTIFY] Dashboard refreshed successfully!');
                     } catch (error) {
                         console.error('[NOTIFY] Error refreshing dashboard:', error);
-                        this.showToast('⚠️ Refresh Error', 'Please refresh the page manually', 'error', 'fa-exclamation-triangle');
                     }
-                }, 1500);
+                }, 500); // Small delay to ensure DB transaction is committed
+            }
+
+            // Show final success message when completely done
+            if (data.step === 'done' && data.status === 'success') {
+                console.log('[NOTIFY] Analysis fully complete.');
+                // Dashboard already refreshed at 'save' step, just show completion message
+                this.showToast('✨ Processing Complete', 'Your dashboard has been updated!', 'success', 'fa-sparkles');
             }
         }
 

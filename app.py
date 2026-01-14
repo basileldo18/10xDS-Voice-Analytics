@@ -88,6 +88,7 @@ def create_notification_event(step, message, status="active", file_id=None):
     if file_id: payload["file_id"] = file_id
     return json.dumps(payload)
 
+
 async def process_drive_file(file_path, filename, drive_file_id, notification_manager):
     """
     Async version of audio processing with notifications for Drive uploads.
@@ -97,11 +98,11 @@ async def process_drive_file(file_path, filename, drive_file_id, notification_ma
         
         # 1. Start Notification
         if notification_manager:
-            await notification_manager.broadcast(create_notification_event("drive_import", f"Importing from Google Drive: {filename}", "active"))
+            await notification_manager.broadcast(create_notification_event("drive_import", f"Importing {filename} from Google Drive...", "active"))
 
         # 2. Transcription
         if notification_manager:
-            await notification_manager.broadcast(create_notification_event("transcribe", "Transcribing audio...", "active"))
+            await notification_manager.broadcast(create_notification_event("transcribe", f"Transcribing audio file: {filename}", "active"))
             
         # Run blocking transcribe in threadpool
         transcript, duration_seconds, diarization_data, speaker_count, detected_lang = await run_in_threadpool(
@@ -109,22 +110,22 @@ async def process_drive_file(file_path, filename, drive_file_id, notification_ma
         )
         
         if notification_manager:
-            await notification_manager.broadcast(create_notification_event("transcribe", "Transcription complete", "complete"))
+            await notification_manager.broadcast(create_notification_event("transcribe", f"Transcription complete! Duration: {int(duration_seconds)}s, Speakers: {speaker_count}", "complete"))
 
         # 3. Analysis
         if notification_manager:
-            await notification_manager.broadcast(create_notification_event("analyze", "Analyzing content...", "active"))
+            await notification_manager.broadcast(create_notification_event("analyze", "Analyzing transcript with AI...", "active"))
             
         sentiment, tags, summary, speakers = await run_in_threadpool(
             analyze_transcript, transcript, diarization_data=diarization_data
         )
 
         if notification_manager:
-            await notification_manager.broadcast(create_notification_event("analyze", "Analysis complete", "complete"))
+            await notification_manager.broadcast(create_notification_event("analyze", f"Analysis complete! Sentiment: {sentiment}", "complete"))
 
         # 4. Upload to Supabase Storage
         if notification_manager:
-            await notification_manager.broadcast(create_notification_event("upload", "Uploading to storage...", "active"))
+            await notification_manager.broadcast(create_notification_event("upload", "Uploading audio to Supabase storage...", "active"))
         
         # Upload audio file to Supabase storage bucket
         audio_url = await run_in_threadpool(upload_audio_to_supabase, file_path, filename)
@@ -133,13 +134,15 @@ async def process_drive_file(file_path, filename, drive_file_id, notification_ma
         if not audio_url and drive_file_id:
             audio_url = f"https://drive.google.com/uc?export=download&id={drive_file_id}"
             print(f"[STORAGE] Using Google Drive URL as fallback")
-        
-        if notification_manager:
-            await notification_manager.broadcast(create_notification_event("upload", "Upload complete", "complete"))
+            if notification_manager:
+                await notification_manager.broadcast(create_notification_event("upload", "Using Google Drive URL as backup", "complete"))
+        else:
+            if notification_manager:
+                await notification_manager.broadcast(create_notification_event("upload", "Successfully uploaded to Supabase storage!", "complete"))
 
         # 5. Save Logic (Reused from process_audio_file logic but adapted)
         if notification_manager:
-            await notification_manager.broadcast(create_notification_event("save", "Saving results...", "active"))
+            await notification_manager.broadcast(create_notification_event("save", "Saving to database...", "active"))
 
         # Patch diarization (copied logic)
         if speakers and diarization_data:
@@ -180,7 +183,8 @@ async def process_drive_file(file_path, filename, drive_file_id, notification_ma
             if exists.data:
                 print(f"[DB] Skipping save: {filename} already exists.")
                 if notification_manager:
-                    await notification_manager.broadcast(create_notification_event("done", f"File already processed: {filename}", "success"))
+                    await notification_manager.broadcast(create_notification_event("save", "File already processed", "complete"))
+                    await notification_manager.broadcast(create_notification_event("done", f"{filename} already exists in database", "success"))
                 return
 
             # Send Email
@@ -192,20 +196,27 @@ async def process_drive_file(file_path, filename, drive_file_id, notification_ma
 
             await run_in_threadpool(lambda: supabase.table('calls').insert(data).execute())
             print(f"[DB] Saved results for {filename}")
+            
+            # Send save completion notification
+            if notification_manager:
+                await notification_manager.broadcast(create_notification_event("save", "Successfully saved to database!", "complete"))
 
+        # Final success notification
         if notification_manager:
-            await notification_manager.broadcast(create_notification_event("done", "Processing successful!", "success"))
+            await notification_manager.broadcast(create_notification_event("done", f"✅ {filename} processed successfully!", "success"))
             
     except Exception as e:
         print(f"[PROCESS] Error in async drive processing: {e}")
         if notification_manager:
-            await notification_manager.broadcast(create_notification_event("error", f"Error: {str(e)}", "error"))
+            await notification_manager.broadcast(create_notification_event("error", f"Error processing {filename}: {str(e)}", "error"))
     finally:
         # Cleanup temp file
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)
-            except: pass
+                print(f"[CLEANUP] Removed temp file: {file_path}")
+            except Exception as cleanup_err:
+                print(f"[CLEANUP] Failed to remove temp file: {cleanup_err}")
 
 def sync_drive_state():
     global drive_page_token
