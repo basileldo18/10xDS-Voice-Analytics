@@ -7,6 +7,7 @@ import asyncio
 import threading
 import smtplib
 import uuid  # Added for webhook channel IDs
+import aiofiles  # For async file operations
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional, Dict, Any
@@ -78,6 +79,8 @@ async def run_startup_tasks():
 
 drive_page_token = None
 app_loop = None
+# Track which Drive files we've already seen/processed
+seen_ids = set()
 
 def create_notification_event(step, message, status="active", file_id=None):
     """Helper to create standard notification payload."""
@@ -119,7 +122,22 @@ async def process_drive_file(file_path, filename, drive_file_id, notification_ma
         if notification_manager:
             await notification_manager.broadcast(create_notification_event("analyze", "Analysis complete", "complete"))
 
-        # 4. Save Logic (Reused from process_audio_file logic but adapted)
+        # 4. Upload to Supabase Storage
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("upload", "Uploading to storage...", "active"))
+        
+        # Upload audio file to Supabase storage bucket
+        audio_url = await run_in_threadpool(upload_audio_to_supabase, file_path, filename)
+        
+        # Fallback to Google Drive URL if Supabase upload fails
+        if not audio_url and drive_file_id:
+            audio_url = f"https://drive.google.com/uc?export=download&id={drive_file_id}"
+            print(f"[STORAGE] Using Google Drive URL as fallback")
+        
+        if notification_manager:
+            await notification_manager.broadcast(create_notification_event("upload", "Upload complete", "complete"))
+
+        # 5. Save Logic (Reused from process_audio_file logic but adapted)
         if notification_manager:
             await notification_manager.broadcast(create_notification_event("save", "Saving results...", "active"))
 
@@ -141,9 +159,6 @@ async def process_drive_file(file_path, filename, drive_file_id, notification_ma
             diarization_data = sorted_diarization
             if len(speaker_map) > 0:
                 speaker_count = len(speaker_map)
-
-        # Generate Audio URL (Drive ID)
-        audio_url = f"https://drive.google.com/uc?export=download&id={drive_file_id}"
 
         data = {
             "filename": filename,
@@ -1034,9 +1049,78 @@ def sync_seen_ids_from_db():
                 # Extract ID from https://drive.google.com/uc?export=download&id=...
                 drive_id = url.split('id=')[-1].split('&')[0]
                 seen_ids.add(drive_id)
-        print(f"[SYNC] Synchronized {len(seen_ids)} IDs from database (Last 1000).")
+        print(f"[SYNC] Synchronized {len(seen_ids)} IDs from database (Last 100).")
     except Exception as e:
         print(f"[SYNC] Error synchronizing from DB: {e}")
+
+def check_for_updates():
+    """
+    Scan Google Drive folder for new audio files and process them.
+    Called by webhook when Drive files change.
+    """
+    global seen_ids
+    try:
+        print("[DRIVE-CHECK] Scanning for new files...")
+        service = get_drive_service()
+        if not service:
+            print("[DRIVE-CHECK] Drive service not available")
+            return
+        
+        # Get current files in the watched folder
+        files = list_files_in_folder(service, FOLDER_ID)
+        
+        new_files_found = []
+        for file in files:
+            file_id = file['id']
+            filename = file['name']
+            
+            # Skip if we've already processed this file
+            if file_id in seen_ids:
+                continue
+            
+            # Check if file already exists in database
+            if supabase:
+                exists = supabase.table('calls').select('id').eq('filename', filename).execute()
+                if exists.data:
+                    print(f"[DRIVE-CHECK] File {filename} already in database, skipping")
+                    seen_ids.add(file_id)
+                    continue
+            
+            # New file found!
+            new_files_found.append(file)
+            seen_ids.add(file_id)
+        
+        if not new_files_found:
+            print("[DRIVE-CHECK] No new files found")
+            return
+        
+        print(f"[DRIVE-CHECK] Found {len(new_files_found)} new file(s) to process")
+        
+        # Process each new file
+        for file in new_files_found:
+            try:
+                file_id = file['id']
+                filename = file['name']
+                
+                print(f"[DRIVE-CHECK] Processing new file: {filename}")
+                
+                # Download file
+                file_path = download_file_from_drive(service, file_id, filename)
+                
+                # Process the audio file
+                process_audio_file(file_path, filename, drive_file_id=file_id)
+                
+                print(f"[DRIVE-CHECK] Successfully processed: {filename}")
+                
+            except Exception as file_error:
+                print(f"[DRIVE-CHECK] Error processing file {filename}: {file_error}")
+                # Continue with next file even if this one fails
+                continue
+                
+    except Exception as e:
+        print(f"[DRIVE-CHECK] Error scanning for updates: {e}")
+        import traceback
+        traceback.print_exc()
 
 # --- Vapi Webhooks ---
 
