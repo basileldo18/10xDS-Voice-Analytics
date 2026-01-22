@@ -4,8 +4,8 @@
 
 // Supabase Configuration
 // Supabase Configuration
-const SUPABASE_URL = 'https://vsnzpmeuhsjqbkviebbf.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzbnpwbWV1aHNqcWJrdmllYmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NjcyOTMsImV4cCI6MjA4MDQ0MzI5M30.4-eEKIPw5pXHacQYcjK43puRNeCow1wS93XRVv9N7iM';
+const SUPABASE_URL = window.VOX_CONFIG?.supabaseUrl || '';
+const SUPABASE_KEY = window.VOX_CONFIG?.supabaseKey || '';
 
 let supabaseClient = null;
 

@@ -1509,7 +1509,11 @@ async def index(request: Request, user_id: str = Depends(login_required)):
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings(request: Request, user_id: str = Depends(login_required)):
-    return templates.TemplateResponse("settings.html", {"request": request})
+    return templates.TemplateResponse("settings.html", {
+        "request": request,
+        "supabase_url": os.environ.get("SUPABASE_URL", ""),
+        "supabase_key": os.environ.get("SUPABASE_KEY", "")
+    })
 
 @app.get("/debug", response_class=HTMLResponse)
 async def debug_page(request: Request):
@@ -1519,7 +1523,11 @@ async def debug_page(request: Request):
 async def login_page(request: Request):
     if "user_id" in request.session:
         return RedirectResponse(url="/")
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "supabase_url": os.environ.get("SUPABASE_URL", ""),
+        "supabase_key": os.environ.get("SUPABASE_KEY", "")
+    })
 
 @app.post("/api/auth/login")
 async def api_login(request: Request, login_data: LoginRequest):

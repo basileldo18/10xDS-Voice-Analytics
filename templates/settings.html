@@ -287,6 +287,12 @@
     <!-- Toast Notifications Container -->
     <div class="toast-container" id="toast-container"></div>
 
+    <script>
+        window.VOX_CONFIG = {
+            supabaseUrl: '{{ supabase_url }}',
+            supabaseKey: '{{ supabase_key }}'
+        };
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/static/js/settings.js?v=1.1"></script>
 </body>
