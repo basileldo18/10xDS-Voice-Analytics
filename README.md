@@ -29,7 +29,7 @@
 -   **Database**: Supabase (PostgreSQL)
 -   **AI Models**:
     -   LLM: Meta Llama 3 (via Groq)
-    -   Transcription: AssemblyAI
+    -   Transcription: AssemblyAI 
 -   **Voice AI**: Vapi
 -   **Services**: Google Drive API, Gmail SMTP (Notifications)
 
