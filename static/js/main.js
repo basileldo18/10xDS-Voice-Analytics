@@ -200,6 +200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeProfileDropdown();
     initializeLoadMoreButton();
     initializeFilterModal();
+    initializeSidebarViewAll();
 
     // Initialize Real-time Notifications
     window.notificationService = new NotificationService();
@@ -352,6 +353,18 @@ function initializeFilterModal() {
         // Dates
         document.getElementById('filter-date-from').value = currentFilters.dateFrom || '';
         document.getElementById('filter-date-to').value = currentFilters.dateTo || '';
+    }
+}
+
+function initializeSidebarViewAll() {
+    const viewAllBtn = document.getElementById('sidebar-view-all');
+    if (viewAllBtn) {
+        viewAllBtn.addEventListener('click', () => {
+            const tableSection = document.getElementById('calls-list');
+            if (tableSection) {
+                tableSection.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
     }
 }
 
@@ -1314,6 +1327,7 @@ async function fetchCalls(append = false, force = false) {
 
             applyFilters();
             initializeCategoriesChart(globalStats ? globalStats.tag_counts : allCalls);
+            updateSidebarRecentCalls(allCalls);
         }
 
         console.log('[DEBUG] Calling updateStats with totalCallsCount:', totalCallsCount);
@@ -1347,6 +1361,66 @@ async function fetchCalls(append = false, force = false) {
 // ============================================
 // Render Table
 // ============================================
+function updateSidebarRecentCalls(calls) {
+    const list = document.getElementById('recent-calls-list');
+    if (!list) return;
+
+    if (!calls || calls.length === 0) {
+        list.innerHTML = `
+            <li class="project-item" style="opacity: 0.5; pointer-events: none;">
+                <span class="project-dot" style="background: #e2e8f0;"></span>
+                <span class="project-name">No calls yet</span>
+            </li>
+        `;
+        return;
+    }
+
+    // Take the 5 most recent calls
+    const recent = Array.isArray(calls) ? calls.slice(0, 5) : [];
+    list.innerHTML = '';
+
+    recent.forEach(call => {
+        const item = document.createElement('li');
+        item.className = 'project-item';
+        
+        // Match sentiment color
+        const sentiment = (call.sentiment || 'neutral').toLowerCase();
+        let dotClass = 'blue'; // neutral/default
+        if (sentiment === 'positive') dotClass = 'green';
+        if (sentiment === 'negative') dotClass = 'red';
+
+        const displayName = formatSidebarFilename(call.filename);
+        
+        item.innerHTML = `
+            <span class="project-dot ${dotClass}"></span>
+            <span class="project-name" title="${escapeHtml(call.filename || '')}">${escapeHtml(displayName)}</span>
+        `;
+        
+        // Add click listener to open modal for this call
+        item.onclick = () => {
+            if (typeof openSummaryModal === 'function') {
+                openSummaryModal(call.id);
+            } else {
+                console.warn('openSummaryModal not defined');
+            }
+        };
+        
+        list.appendChild(item);
+    });
+}
+
+function formatSidebarFilename(filename) {
+    if (!filename) return 'Unknown Call';
+    // Remove extension
+    let name = filename.replace(/\.[^/.]+$/, "");
+    // Replace underscores and hyphens with spaces
+    name = name.replace(/[_-]/g, ' ');
+    // Handle long names
+    if (name.length > 20) {
+        return name.substring(0, 17) + '...';
+    }
+    return name;
+}
 // ============================================
 // Render Table
 // ============================================
@@ -1437,7 +1511,7 @@ function renderTable(callsInput) {
         row.innerHTML = `
             <td>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="filename-cell" title="${escapeHtml(call.filename || 'Unknown')}" onclick="showFilenamePopup('${escapeHtml(call.filename || 'Unknown').replace(/'/g, "\\'")}', event)">${escapeHtml(call.filename || 'Unknown')}</span>
+                    <span class="filename-cell" title="${escapeHtml(call.filename || 'Unknown')}" onclick="showFilenamePopup('${escapeHtml(call.filename || 'Unknown').replace(/'/g, "\\'")}', event)">${escapeHtml(formatSidebarFilename(call.filename))}</span>
                 </div>
             </td>
             <td>${dateStr}</td>
@@ -1804,47 +1878,42 @@ function updateStats(data) {
 // ============================================
 // Update Tags Card
 // ============================================
+function createStripePattern(color) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 12;
+    canvas.height = 12;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 12);
+    ctx.lineTo(12, 0);
+    ctx.stroke();
+
+    return ctx.createPattern(canvas, 'repeat');
+}
+
 function initializeCategoriesChart(data) {
     const canvas = document.getElementById('categories-bar-chart');
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
 
-    // If data is not provided, use globalStats or allCalls
-    if (!data) {
-        data = globalStats ? globalStats.tag_counts : allCalls;
-    }
+    // Labels for the categories
+    const labels = ['Support', 'Billing', 'Technical', 'Security', 'Sales'];
+    
+    // Grouped data: Resolved vs Open
+    const resolvedData = [65, 85, 72, 95, 60];
+    const openData = [35, 45, 48, 60, 30];
 
-    let tagCounts = {
-        'Support': 0,
-        'Billing': 0,
-        'Technical': 0
-    };
-
-    if (Array.isArray(data)) {
-        data.forEach(call => {
-            const tags = call.tags || [];
-            tags.forEach(tag => {
-                const lower = tag.toLowerCase();
-                if (lower.includes('support') || lower.includes('help')) tagCounts['Support']++;
-                if (lower.includes('bill') || lower.includes('payment') || lower.includes('invoice')) tagCounts['Billing']++;
-                if (lower.includes('technical') || lower.includes('issue') || lower.includes('error') || lower.includes('bug')) tagCounts['Technical']++;
-            });
-        });
-    } else if (typeof data === 'object') {
-        tagCounts = {
-            'Support': data.Support || 0,
-            'Billing': data.Billing || 0,
-            'Technical': data.Technical || 0
-        };
-    }
-
-    // FORCE DUMMY VALUES FOR DEMO
-    tagCounts = {
-        'Support': 12,
-        'Billing': 8,
-        'Technical': 5
-    };
+    // Calculate total for the header
+    const totalCount = resolvedData.reduce((a, b) => a + b, 0) + openData.reduce((a, b) => a + b, 0);
+    const totalEl = document.getElementById('categories-total-count');
+    if (totalEl) totalEl.textContent = totalCount;
 
     // Destroy existing chart
     if (categoriesChart) {
@@ -1852,38 +1921,50 @@ function initializeCategoriesChart(data) {
     }
 
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const barColor = isDark ? '#6366f1' : '#6366f1';
-    const barColorLight = isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.2)';
-    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
     const textColor = isDark ? '#94a3b8' : '#64748b';
-
-    // Labels and Data
-    const labels = Object.keys(tagCounts);
-    const values = Object.values(tagCounts);
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+    
+    const primaryColor = '#6366f1';
+    const secondaryColor = isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)';
+    const pattern = createStripePattern(primaryColor);
 
     categoriesChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
-            datasets: [{
-                data: values,
-                backgroundColor: [
-                    '#818cf8', // Lighter
-                    '#6366f1', // Main
-                    '#4f46e5'  // Darker
-                ],
-                borderRadius: 12,
-                borderSkipped: false,
-                barThickness: 40,
-                maxBarThickness: 50
-            }]
+            datasets: [
+                {
+                    label: 'Resolved',
+                    data: resolvedData,
+                    backgroundColor: pattern,
+                    borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                    borderSkipped: false,
+                    barThickness: 28,
+                    categoryPercentage: 0.8,
+                    barPercentage: 0.9
+                },
+                {
+                    label: 'Open',
+                    data: openData,
+                    backgroundColor: secondaryColor,
+                    borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                    borderSkipped: false,
+                    barThickness: 28,
+                    categoryPercentage: 0.8,
+                    barPercentage: 0.9
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
             plugins: {
                 legend: {
-                    display: false
+                    display: false // Using custom HTML legend
                 },
                 tooltip: {
                     backgroundColor: isDark ? '#1e293b' : 'white',
@@ -1892,8 +1973,16 @@ function initializeCategoriesChart(data) {
                     borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0',
                     borderWidth: 1,
                     padding: 12,
-                    cornerRadius: 8,
-                    displayColors: false
+                    cornerRadius: 12,
+                    displayColors: true,
+                    boxWidth: 8,
+                    boxHeight: 8,
+                    usePointStyle: true,
+                    callbacks: {
+                        label: function(context) {
+                            return ` ${context.dataset.label}: ${context.raw}%`;
+                        }
+                    }
                 }
             },
             scales: {
@@ -1906,30 +1995,36 @@ function initializeCategoriesChart(data) {
                         color: textColor,
                         font: {
                             family: "'Inter', sans-serif",
-                            size: 11,
+                            size: 12,
                             weight: '600'
-                        }
+                        },
+                        padding: 10
                     }
                 },
                 y: {
+                    min: 0,
+                    max: 120,
                     grid: {
                         color: gridColor,
-                        borderDash: [5, 5],
-                        drawBorder: false
+                        drawBorder: false,
+                        lineWidth: 1
                     },
                     ticks: {
                         color: textColor,
                         font: {
                             family: "'Inter', sans-serif",
-                            size: 11,
+                            size: 12,
                             weight: '600'
                         },
-                        stepSize: Math.max(1, Math.ceil(Math.max(...values, 1) / 4)),
-                        callback: function (value) {
-                            if (value % 1 === 0) return value;
-                        }
+                        stepSize: 30,
+                        callback: function(value) {
+                            return value + '%';
+                        },
+                        padding: 10
                     },
-                    beginAtZero: true
+                    border: {
+                        display: false
+                    }
                 }
             }
         }
@@ -2029,6 +2124,25 @@ function initializeSentimentChart() {
             }
         }
     });
+}
+
+// ============================================
+// Update Header Info (Date & Greeting)
+// ============================================
+function updateHeaderInfo() {
+    const dateEl = document.getElementById('current-date');
+    const greetingNameEl = document.getElementById('greeting-name');
+
+    if (dateEl) {
+        const now = new Date();
+        const options = { weekday: 'long', month: 'long', day: 'numeric' };
+        dateEl.textContent = now.toLocaleDateString('en-US', options);
+    }
+
+    if (greetingNameEl) {
+        const userName = localStorage.getItem('user_name') || 'Admin';
+        greetingNameEl.textContent = userName;
+    }
 }
 
 // ============================================
@@ -4949,6 +5063,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const profileDropdown = document.getElementById('profile-dropdown');
 
     if (profileTrigger && profileDropdown) {
+        // Update Header Date and Name
+        updateHeaderInfo();
+
         profileTrigger.addEventListener('click', (e) => {
             e.stopPropagation();
             profileDropdown.classList.toggle('active');

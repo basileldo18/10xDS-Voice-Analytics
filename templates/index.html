@@ -20,7 +20,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="/static/css/style.css?v=5.3">
+    <link rel="stylesheet" href="/static/css/style.css?v=6.1">
     <link rel="stylesheet" href="/static/css/live-chat.css?v=1.0">
     <link rel="stylesheet" href="/static/css/minutes-translate.css?v=1.4">
     <link rel="stylesheet" href="/static/css/minutes-fullwidth.css?v=1.0">
@@ -62,40 +62,61 @@
         <!-- Sidebar -->
         <nav class="sidebar" id="sidebar">
             <div class="sidebar-top">
+                <!-- Logo -->
                 <div class="logo">
                     <div class="logo-icon">
-                        <i class="fa-solid fa-wave-square"></i>
+                        <i class="fa-solid fa-bolt"></i>
                     </div>
                     <span class="logo-text">VoxAnalyze</span>
                 </div>
 
+                <!-- Main Navigation -->
                 <ul class="nav-links">
                     <li class="nav-item active" data-section="dashboard">
-                        <a href="#dashboard-section" class="nav-link" id="nav-dashboard">
-                            <i class="fa-solid fa-chart-pie"></i>
-                            <span>Dashboard</span>
-                        </a>
-                    </li>
-
-                    <li class="nav-item" data-section="analytics">
-                        <a href="#analytics-section" class="nav-link" id="nav-analytics">
-                            <i class="fa-solid fa-chart-bar"></i>
-                            <span>Analytics</span>
+                        <a href="#" class="nav-link">
+                            <i class="fa-solid fa-house"></i>
+                            <span>Home</span>
                         </a>
                     </li>
                     <li class="nav-item" data-section="live-calls">
-                        <a href="#live-calls-section" class="nav-link" id="nav-live-calls">
-                            <i class="fa-solid fa-headset"></i>
+                        <a href="#recent-calls-list" class="nav-link">
+                            <i class="fa-solid fa-signal"></i>
                             <span>Live Calls</span>
-                            <span class="nav-badge pulse" id="live-call-count"
-                                style="display:none; background: #ef4444;">Live</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" data-section="analytics">
+                        <a href="/analytics" class="nav-link">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <span>Analytics</span>
                         </a>
                     </li>
                 </ul>
+
+                <!-- Divider -->
+                <div class="sidebar-divider"></div>
+
+                <!-- Live Calls Section -->
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <span class="section-title">RECENT SESSIONS</span>
+                        <button class="add-project-btn" id="sidebar-view-all">View All</button>
+                    </div>
+                    <ul class="project-list" id="recent-calls-list">
+                        <!-- Dynamic items injected by JS -->
+                        <li class="project-item" style="opacity: 0.5; pointer-events: none;">
+                            <span class="project-dot" style="background: #e2e8f0;"></span>
+                            <span class="project-name">Loading...</span>
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             <div class="sidebar-bottom">
-                <button id="logout-btn" class="logout-btn">
+                <a href="#" class="nav-link">
+                    <i class="fa-solid fa-gear"></i>
+                    <span>Settings</span>
+                </a>
+                <button class="logout-btn" id="logout-btn">
                     <i class="fa-solid fa-right-from-bracket"></i>
                     <span>Logout</span>
                 </button>
@@ -107,8 +128,8 @@
             <!-- Top Header -->
             <header class="top-header">
                 <div class="header-left">
-                    <h1 class="page-title">Dashboard</h1>
-                    <p class="page-subtitle">Track your call analytics and insights</p>
+                    <p class="date-today" id="current-date">Monday, July 7</p>
+                    <h1 class="greeting-title">Dashboard</h1>
                 </div>
 
                 <div class="header-right">
@@ -305,12 +326,29 @@
                 <div class="chart-card categories-analysis-card">
                     <div class="card-header">
                         <div class="header-info">
-                            <h2>Top Categories</h2>
-                            <p class="card-subtitle">Call volume by tag</p>
+                            <div class="header-main-row">
+                                <h2>Top Categories</h2>
+                                <div class="card-header-actions">
+                                    <div class="header-dropdown-minimal">
+                                        <span>Weekly</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="header-stats-row">
+                                <span class="total-summary">Total: <strong id="categories-total-count">25</strong></span>
+                                <div class="header-legend">
+                                    <div class="legend-item">
+                                        <span class="legend-dot resolved"></span>
+                                        <span>Resolved</span>
+                                    </div>
+                                    <div class="legend-item">
+                                        <span class="legend-dot open"></span>
+                                        <span>Open</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <button class="card-action-btn">
-                            <i class="fa-solid fa-chart-bar"></i>
-                        </button>
                     </div>
 
                     <div class="categories-card-body">
@@ -1247,7 +1285,7 @@
     <script src="https://unpkg.com/@vapi-ai/client-sdk-react/dist/embed/widget.umd.js" async defer></script>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="/static/js/main.js?v=4.27"></script>
+    <script src="/static/js/main.js?v=4.29"></script>
     <script src="/static/js/live_calls.js?v=1.5"></script>
     <script src="/static/js/vapi_events.js?v=1.0"></script>
 </body>
