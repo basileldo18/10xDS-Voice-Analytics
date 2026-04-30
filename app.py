@@ -1508,7 +1508,7 @@ async def login_required(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, user_id: str = Depends(login_required)):
-    return templates.TemplateResponse("index.html", {
+    return templates.TemplateResponse(request=request, name="index.html", context={
         "request": request,
         "vapi_public_key": os.environ.get("VAPI_PUBLIC_KEY", ""),
         "vapi_assistant_id": os.environ.get("VAPI_ASSISTANT_ID", ""),
@@ -1518,7 +1518,7 @@ async def index(request: Request, user_id: str = Depends(login_required)):
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings(request: Request, user_id: str = Depends(login_required)):
-    return templates.TemplateResponse("settings.html", {
+    return templates.TemplateResponse(request=request, name="settings.html", context={
         "request": request,
         "supabase_url": os.environ.get("SUPABASE_URL", ""),
         "supabase_key": os.environ.get("SUPABASE_KEY", "")
@@ -1526,13 +1526,13 @@ async def settings(request: Request, user_id: str = Depends(login_required)):
 
 @app.get("/debug", response_class=HTMLResponse)
 async def debug_page(request: Request):
-    return templates.TemplateResponse("debug_chat.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="debug_chat.html", context={"request": request})
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     if "user_id" in request.session:
         return RedirectResponse(url="/")
-    return templates.TemplateResponse("login.html", {
+    return templates.TemplateResponse(request=request, name="login.html", context={
         "request": request,
         "supabase_url": os.environ.get("SUPABASE_URL", ""),
         "supabase_key": os.environ.get("SUPABASE_KEY", "")
