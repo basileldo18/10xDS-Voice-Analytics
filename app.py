@@ -2481,4 +2481,4 @@ if __name__ == "__main__":
     # sync_seen_ids_from_db()
     
     print("[SERVER] Starting FastAPI Server with Uvicorn...")
-    uvicorn.run("app:app", host="0.0.0.0", port=8080, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8080)
