@@ -546,7 +546,8 @@ img {
 
 .sidebar {
     width: var(--sidebar-width);
-    background: var(--color-white);
+   /* background: var(--color-white); */
+    background: var(--bg-glass-strong);
     border-right: 1px solid var(--border-light);
     display: flex;
     flex-direction: column;
