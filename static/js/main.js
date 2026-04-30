@@ -1848,17 +1848,13 @@ function updateStats(data) {
                 Math.round(callsWithDuration.reduce((sum, c) => sum + (c.duration || 0), 0) / callsWithDuration.length) : 0;
         }
     } else if (typeof data === 'object') {
-        // FORCE DUMMY VALUES FOR DEMO
-        const posCount = 13;
-        const negCount = 5;
-        const neuCount = 2;
-        
-        totalCallsCount = 20;
-        if (totalEl) totalEl.textContent = "20";
+        // Use real fields from globalStats if available
+        totalCallsCount = data.total_calls || totalCallsCount || 20;
+        if (totalEl) totalEl.textContent = totalCallsCount;
 
-        positivePercent = 65;
-        negativePercent = 25;
-        avgSeconds = 145;
+        positivePercent = data.positive_percent !== undefined ? data.positive_percent : 65;
+        negativePercent = data.negative_percent !== undefined ? data.negative_percent : 25;
+        avgSeconds = data.avg_duration_seconds !== undefined ? data.avg_duration_seconds : 145;
     }
 
     if (positiveEl) animateCounter(positiveEl, positivePercent, '%');
@@ -2040,9 +2036,10 @@ function initializeSentimentChart() {
 
     const ctx = canvas.getContext('2d');
 
-    // FORCE DUMMY VALUES FOR DEMO
-    console.log('[DEBUG] Initializing Sentiment Chart with Dummy Data...');
-    let positive = 13, neutral = 2, negative = 5;
+    // Use counts from globalStats if available
+    let positive = globalStats ? (globalStats.positive_count || 13) : 13;
+    let neutral = globalStats ? (globalStats.neutral_count || 2) : 2;
+    let negative = globalStats ? (globalStats.negative_count || 5) : 5;
     
     // Visible marker for debugging
     const chartTitle = document.querySelector('.chart-center-content .center-label');
