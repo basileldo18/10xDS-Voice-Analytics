@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import Response
 from starlette.concurrency import run_in_threadpool
-
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from dotenv import load_dotenv
 
 from google.oauth2.credentials import Credentials
@@ -249,7 +249,16 @@ app.add_middleware(
 
 # Static Files & Templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
+#templates = Jinja2Templates(directory="templates")
+
+env = Environment(
+    loader=FileSystemLoader("templates"),
+    autoescape=select_autoescape(["html", "xml"]),
+    cache_size=0  # 🔥 disables cache safely
+)
+
 templates = Jinja2Templates(directory="templates")
+templates.env = env
 
 # Config path
 UPLOAD_FOLDER = 'uploads'
