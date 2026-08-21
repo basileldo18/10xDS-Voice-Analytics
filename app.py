@@ -592,7 +592,7 @@ Respond ONLY in this exact JSON format:
     }}
 }}"""
         response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-20b",
             messages=[
                 {"role": "system", "content": "You are a professional call analysis expert who provides detailed, specific, and contextual analysis. NEVER use generic one-word answers. Always write detailed responses (minimum 2 sentences) based on the actual transcript content. Extract ONLY speaker names if available. Be thorough and specific in your analysis."},
                 {"role": "user", "content": prompt}
@@ -1879,7 +1879,7 @@ Segments:
 {combined[:6000]}"""
             
             resp = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-20b",
                 messages=[{"role": "system", "content": "Translate accurately. Preserve format."}, {"role": "user", "content": prompt}],
                 temperature=0.3, max_tokens=4000
             )
@@ -1917,7 +1917,7 @@ JSON to translate:
 Return the translated JSON (keep field names like 'overview', 'key_points' in English):"""
                 
                 resp = groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model="openai/gpt-oss-20b",
                     messages=[
                         {"role": "system", "content": f"Translate to {language_name}. Return JSON only."},
                         {"role": "user", "content": prompt}
@@ -1960,7 +1960,7 @@ Return the translated JSON (keep field names like 'overview', 'key_points' in En
                 # Plain text translation
                 prompt = f"Translate the following text to {language_name}:\n\n{req.transcript[:6000]}"
                 resp = groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model="openai/gpt-oss-20b",
                     messages=[
                         {"role": "system", "content": f"You are a professional translator. Translate accurately to {language_name}."},
                         {"role": "user", "content": prompt}
